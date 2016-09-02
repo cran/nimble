@@ -1,6 +1,6 @@
 source(system.file(file.path('tests', 'test_utils.R'), package = 'nimble'))
 
-context("Testing of declare and setSize")
+context("Testing of declare, setSize, numeric, integer, matrix, and array")
 
 caseCounter <- 1
 makeCaseMsg <- function(i, xtra = character()) paste("declare and setSize testing case",i,xtra )
@@ -389,3 +389,87 @@ expect_equivalent(nf1$run(),  5, makeCaseMsg(caseCounter))
 cnf1 <- compileNimble(nf1)
 expect_equivalent(cnf1$run(),  5, makeCaseMsg(caseCounter, 'compiled')) 
 caseCounter <- caseCounter + 1
+
+## testing of numeric(), integer(), matrix(), and array()
+
+expected <- numeric(10)
+Rfun <- nimbleFunction(run = function() {
+    ans <- numeric(10)
+    returnType(double(1))
+    return(ans)
+})
+Cfun <- compileNimble(Rfun)
+test_that('numeric 1', expect_equal(Rfun(), expected))
+test_that('numeric 2', expect_equal(Cfun(), expected))
+test_that('numeric 3', expect_identical(class(Rfun()[1]), 'numeric'))
+test_that('numeric 4', expect_identical(class(Cfun()[1]), 'numeric'))
+
+
+expected <- rep(3, length = 2)
+Rfun <- nimbleFunction(run = function() {
+    ans <- numeric(value = 3, length = 2)
+    returnType(double(1))
+    return(ans)
+})
+Cfun <- compileNimble(Rfun)
+test_that('numeric 5', expect_equal(Rfun(), expected))
+test_that('numeric 6', expect_equal(Cfun(), expected))
+test_that('numeric 7', expect_identical(class(Rfun()[1]), 'numeric'))
+test_that('numeric 8', expect_identical(class(Cfun()[1]), 'numeric'))
+
+expected <- rep(9, 3)
+Rfun <- nimbleFunction(run = function() {
+    x <- numeric(10, value = 3)
+    ans <- integer(x[2], x[2]+x[3]*2)
+    returnType(integer(1))
+    return(ans)
+})
+Cfun <- compileNimble(Rfun)
+test_that('integer 9', expect_equal(Rfun(), expected))
+test_that('integer 10', expect_equal(Cfun(), expected))
+test_that('integer 11', expect_identical(class(Rfun()[1]), 'integer'))
+test_that('integer 12', expect_identical(class(Cfun()[1]), 'integer'))
+
+expected <- array(4, c(10,11))
+Rfun <- nimbleFunction(run = function() {
+    ans <- array(4, c(10,11))
+    returnType(double(2))
+    return(ans)
+})
+Cfun <- compileNimble(Rfun)
+test_that('integer 13', expect_equal(Rfun(), expected))
+test_that('integer 14', expect_equal(Cfun(), expected))
+test_that('integer 15', expect_identical(class(Rfun()[1]), 'numeric'))
+test_that('integer 16', expect_identical(class(Cfun()[1]), 'numeric'))
+
+expected <- matrix(as.integer(0), nrow=4, ncol=5)
+Rfun <- nimbleFunction(run = function() {
+    x <- 4
+    y <- 5
+    ans <- matrix(init=FALSE, nrow=x, ncol=y, type='integer')
+    returnType(integer(2))
+    return(ans)
+})
+Cfun <- compileNimble(Rfun)
+test_that('integer 17', expect_equal(Rfun(), expected))
+test_that('integer 18', expect_equal(dim(Cfun()), c(4, 5)))
+test_that('integer 19', expect_identical(class(Rfun()[1,1]), 'integer'))
+test_that('integer 20', expect_identical(class(Cfun()[1,1]), 'integer'))
+
+expected <- c(99, 10.5, 10.5, 10.5)
+Rfun <- nimbleFunction(run = function() {
+    a <- numeric(4)
+    a[1] <- 99
+    b <- numeric(value=.5, 4)
+    a[2:4] <- b[1:3] + numeric(3, 10)
+    returnType(double(1))
+    return(a)
+})
+Cfun <- compileNimble(Rfun)
+test_that('numeric 21', expect_equal(Rfun(), expected))
+test_that('numeric 22', expect_equal(Cfun(), expected))
+test_that('numeric 23', expect_identical(class(Rfun()[1]), 'numeric'))
+test_that('numeric 24', expect_identical(class(Cfun()[1]), 'numeric'))
+
+
+

@@ -20,7 +20,7 @@ nimbleUserNamespace <- as.environment(list())
         compileOnly = FALSE,
         buildInterfacesForCompiledNestedNimbleFunctions = FALSE,   ## provides interfaces, i.e. named access in R, to all variables in nested compiled nimbleFunctions
         clearNimbleFunctionsAfterCompiling = FALSE,
-        checkModel = TRUE,
+        checkModel = FALSE,
         verbose = TRUE,
 
         ## verifies the correct posterior is created for any conjugate samplers, at run-time.
@@ -28,20 +28,29 @@ nimbleUserNamespace <- as.environment(list())
         ## buildConjugateSamplerFunctions()
         verifyConjugatePosteriors = FALSE,
 
+        showCompilerOutput = FALSE,
+
         ## uses the 'new' system for dynamically generated conjugate samplers (DT, March 2016),
         ## rather than the older 'static' system.
-        useDynamicConjugacy = TRUE,
+        ## update May 2016: old (non-dynamic) system is no longer supported -DT
+        ##useDynamicConjugacy = TRUE,
         
         ## default settings for MCMC samplers
-        ## (formerly controlDefaultList appearing in MCMCspec.R)
         MCMCcontrolDefaultList = list(
+            log = FALSE,
+            reflective = FALSE,
             adaptive = TRUE,
             adaptScaleOnly = FALSE,
             adaptInterval = 200,
             scale = 1,
             propCov = 'identity',
             sliceWidth = 1,
-            sliceMaxSteps = 100
+            sliceMaxSteps = 100,
+            pfNparticles = 1000,
+            pfResample = FALSE,
+            pfOptimizeNparticles = FALSE,
+            pfType = 'bootstrap',
+            pfLookahead = 'simulate'
         )
     )
 )

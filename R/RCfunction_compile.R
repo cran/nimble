@@ -17,10 +17,12 @@ RCvirtualFunProcessing <- setRefClass('RCvirtualFunProcessing',
                                           name = 'ANY',		#character
                                           RCfun = 'ANY', ##nfMethodRC
                                           nameSubList = 'ANY',
-                                          compileInfo = 'ANY' ## RCfunctionCompileClass``
+                                          compileInfo = 'ANY', ## RCfunctionCompileClass``
+                                          const = 'ANY'
                                           ),
                                       methods = list(
-                                          initialize = function(f = NULL, funName) {
+                                          initialize = function(f = NULL, funName, const = FALSE) {
+                                              const <<- const
                                               if(!is.null(f)) {
                                                   if(missing(funName)) {
                                                       sf <- substitute(f)
@@ -45,6 +47,15 @@ RCvirtualFunProcessing <- setRefClass('RCvirtualFunProcessing',
                                           setupSymbolTables = function(parentST = NULL) {
                                               argInfoWithMangledNames <- RCfun$argInfo
                                               numArgs <- length(argInfoWithMangledNames)
+                                              if(numArgs > 0) {
+                                                  argIsBlank <- unlist(lapply(RCfun$argInfo, identical, formals(function(a) {})[[1]]))
+                                                  ## it seems to be impossible to store the value of a blank argument, formals(function(a) {})[[1]], in a variable
+                                                  if(any(argIsBlank)) {
+                                                      stop(paste0("Type declaration missing for argument(s) ", paste(names(RCfun$argInfo)[argIsBlank], collapse = ", ")), call. = FALSE)
+                                                  }
+                                              }
+                                              argInfoWithMangledNames <- RCfun$argInfo
+                                              numArgs <- length(argInfoWithMangledNames)
                                               if(numArgs>0) names(argInfoWithMangledNames) <- paste0("ARG", 1:numArgs, "_", Rname2CppName(names(argInfoWithMangledNames)),"_")
                                               nameSubList <<- lapply(names(argInfoWithMangledNames), as.name)
                                               names(nameSubList) <<- names(RCfun$argInfo)
@@ -60,7 +71,12 @@ RCvirtualFunProcessing <- setRefClass('RCvirtualFunProcessing',
                                               if(inherits(compileInfo$origLocalSymTab, 'uninitializedField')) {
                                                   setupSymbolTables()
                                               }
-                                          }))
+                                          },
+                                          printCode = function() {
+                                              writeCode(nimDeparse(compileInfo$nimExpr))
+                                          }
+                                      )
+                                      )
 
 RCfunction <- function(f, name = NA, returnCallable = TRUE) {
     if(is.na(name)) name <- rcFunLabelMaker()
@@ -165,6 +181,7 @@ RCfunProcessing <- setRefClass('RCfunProcessing',
                                        
                                        ## build intermediate variables
                                        exprClasses_buildInterms(compileInfo$nimExpr)
+
                                        if(debug) {
                                            print('nimDeparse(compileInfo$nimExpr)')
                                            writeCode(nimDeparse(compileInfo$nimExpr))
@@ -181,10 +198,11 @@ RCfunProcessing <- setRefClass('RCfunProcessing',
                                            print('lapply(compileInfo$typeEnv, function(x) x$show())')
                                            lapply(compileInfo$typeEnv, function(x) x$show())
                                            writeLines('***** READY FOR setSizes *****')
-                                      browser()
+                                           browser()
                                        }
 
                                        compileInfo$typeEnv[['neededRCfuns']] <<- list()
+                                       compileInfo$typeEnv[['.AllowUnknowns']] <<- TRUE ## will be FALSE for RHS recursion in setSizes
 
                                        passedArgNames <- as.list(compileInfo$origLocalSymTab$getSymbolNames()) 
                                        names(passedArgNames) <- compileInfo$origLocalSymTab$getSymbolNames() 
@@ -198,9 +216,7 @@ RCfunProcessing <- setRefClass('RCfunProcessing',
                                        
                                        if(debug) {
                                            print('compileInfo$nimExpr$show(showType = TRUE) -- broken')
-                                          ## print(compileInfo$nimExpr$show(showType = TRUE))
                                            print('compileInfo$nimExpr$show(showAssertions = TRUE) -- possible broken')
-                                           ## print(compileInfo$nimExpr$show(showAssertions = TRUE))
                                            writeLines('***** READY FOR insertAssertions *****')
                                            browser()
                                        }

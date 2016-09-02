@@ -1,6 +1,6 @@
 
 
-#' Performs initialization nimble model node values and log probabilities
+#' Performs initialization of nimble model node values and log probabilities
 #'
 #' @param model A setup argument, which specializes an instance of this nimble function to a particular model.
 #' @param silent logical indicating whether to suppress logging information
@@ -27,6 +27,7 @@
 #'       ....
 #'    }
 #' )
+#' @export
 initializeModel <- nimbleFunction(
     setup = function(model, silent = FALSE) {
         initFunctionList <- nimbleFunctionList(nodeInit_virtual)
@@ -34,7 +35,7 @@ initializeModel <- nimbleFunction(
 
         RHSonlyNodes <- model$getMaps('nodeNamesRHSonly')
         if(length(RHSonlyNodes) > 0) {
-            initFunctionList[[iter]] <- checkRSHonlyInit(model = model, nodes = RHSonlyNodes)
+            initFunctionList[[iter]] <- checkRHSonlyInit(model = model, nodes = RHSonlyNodes)
             iter <- iter + 1
         }
         
@@ -58,7 +59,7 @@ initializeModel <- nimbleFunction(
 
 nodeInit_virtual <- nimbleFunctionVirtual()
 
-checkRSHonlyInit <- nimbleFunction(
+checkRHSonlyInit <- nimbleFunction(
     contains = nodeInit_virtual,
     setup = function(model, nodes) {},
     run = function() {

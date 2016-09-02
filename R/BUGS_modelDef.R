@@ -34,6 +34,7 @@ modelDefClass <- setRefClass('modelDefClass',
                                  constantsEnv = 'ANY', ## environment with constants, set in assignConstants()
                                  constantsList = 'ANY',  ## named list with constants, set in assignConstants()
                                  constantsNamesList = 'ANY', ## list of constants name objects, set in assignConstants()
+                                 constantsScalarNamesList = 'ANY', ## could eventually replace constantsNamesList. added for newNodeFxns
                                  dimensionsList = 'ANY',		#list		   ## list of provided dimension information, set in assignDimensions()
                                  contexts = 'ANY',				#list 			 ## list of BUGScontextClass objects
                                  declInfo = 'ANY',				#list				 ## list of BUGSdeclInfo objects
@@ -109,6 +110,7 @@ modelDefClass <- setRefClass('modelDefClass',
                                  
                                  #These functions are NOT run inside of setupModel
                                  nodeName2GraphIDs = function(){},
+                                 graphIDs2indexedNodeInfo = function(){},
                                  nodeName2LogProbName = function(){}
                              ))
 
@@ -143,9 +145,10 @@ modelDefClass$methods(setupModel = function(code, constants, dimensions, debug =
     processLinks()                    ## overwrites declInfo (*and adds*) for nodes with link functions           (uses linkInverses)
     reparameterizeDists()             ## overwrites declInfo when distribution reparameterization is needed       (uses distributions), keeps track of orig parameter in .paramName
     insertDistributionBounds()        ## put lower and upper into code expression
-    replaceAllConstants()             ## overwrites declInfo with constants replaced; only replaces scalar constants
+    replaceAllConstants()
     liftExpressionArgs()              ## overwrites declInfo (*and adds*), lifts expressions in distribution arguments to new nodes.  does NOT lift '.param' names
     addRemainingDotParams()           ## overwrites declInfo, adds any additional .paramNames which aren't there  (uses distributions)
+    replaceAllConstants()             ## overwrites declInfo with constants replaced; only replaces scalar constants
     addIndexVarsToDeclInfo()          ## sets field declInfo[[i]]$indexVariableExprs from contexts.  must be after overwrites of declInfo
     genSymbolicParentNodes()          ## sets field declInfo[[i]]$symbolicParentNodes. must be after overwrites of declInfo
     genReplacementsAndCodeReplaced()  ## sets fields: declInfo[[i]]$replacements, $codeReplaced, $replacementNameExprs, $logProbNodeExpr
@@ -161,11 +164,7 @@ modelDefClass$methods(setupModel = function(code, constants, dimensions, debug =
     buildSymbolTable()                    ## 
     genIsDataVarInfo()                    ## only the maxs is ever used, in newModel
     genVarNames()                         ## sets varNames <<- c(names(varInfo), names(logProbVarInfo))
-    return(NULL)
-    
-    ## clear:
-## not used any more    removeEmptyBUGSdeclarations()     ## removes any declInfo[[i]] BUGSdecl objects for which length(indexedNodeInfo) == 0
-    
+    return(NULL)        
 })
 
 codeProcessIfThenElse <- function(code, envir = parent.frame()) {
@@ -185,10 +184,7 @@ codeProcessIfThenElse <- function(code, envir = parent.frame()) {
 }
 
 modelDefClass$methods(setModelValuesClassName = function() {
-    ## use this line to always ensure a unique internal refClass name
     modelValuesClassName <<- paste0(Rname2CppName(name), '_MV_', nimbleUniqueID())
-    ## or this line if not.
-    ##modelValuesClassName <<- paste0(name, '_MV')
 })
 modelDefClass$methods(assignBUGScode = function(code) {
     ## uses 'code' argument, assigns field: BUGScode
@@ -202,10 +198,19 @@ modelDefClass$methods(assignConstants = function(constants) {
         list2env(constants, constantsEnv)
         constantsList <<- constants
         constantsNamesList <<- lapply(ls(constants), as.name)
+        constantLengths <- unlist(lapply(constants, length))
+        if(any(constantLengths > 1)) {
+            iLong <- which(constantLengths > 1)
+            ## message(paste0('Constant(s) ', paste0(names(constants)[iLong], sep=" ", collapse = " "), ' are non-scalar and may be handled as data if necessary.'))
+            ## note some of the processing behind this message occurs in BUGSmodel between making the model def and the model
+            constantsScalarNamesList <<- constantsNamesList[-iLong]
+        } else
+            constantsScalarNamesList <<- constantsNamesList 
     } else {
         constantsList <<- list()
         names(constantsList) <<- character(0)
         constantsNamesList <<- list()
+        constantsScalarNamesList <<- list()
     }
 })
 modelDefClass$methods(assignDimensions = function(dimensions) {
@@ -219,7 +224,7 @@ modelDefClass$methods(assignDimensions = function(dimensions) {
     for(i in seq_along(constantsList)) {
         constName <- names(constantsList)[i]
         ## constDim <- if(is.null(dim(constantsList[[i]]))) length(constantsList[[i]]) else dim(constantsList[[i]])
-        constDim <- dimOrLength(constantsList[[i]], scalarize = TRUE)
+        constDim <- nimbleInternalFunctions$dimOrLength(constantsList[[i]], scalarize = TRUE)
         if(constName %in% names(dL)) {
             if(!identical(as.numeric(dL[[constName]]), as.numeric(constDim))) {
                 stop('inconsistent dimensions between constants and dimensions arguments')
@@ -339,6 +344,7 @@ modelDefClass$methods(splitConstantsAndData = function() {
         if(length(newDataVars)) {
             if(nimbleOptions('verbose')) cat("Detected", paste(newDataVars, collapse = ','), "as data within 'constants'.\n")
             constantsNamesList <<- constantsNamesList[!constantsNames %in% vars]
+            constantsScalarNamesList <<- constantsScalarNamesList[ !(as.character(constantsScalarNamesList) %in% newDataVars) ]
             constantsList[newDataVars] <<- NULL
             for(varName in newDataVars) eval(substitute(rm(varName, envir = constantsEnv), list(varName = varName)))
         }
@@ -467,7 +473,6 @@ modelDefClass$methods(expandDistributions = function() {
         if(BUGSdecl$type != 'stoch') next
         
         newCode <- BUGSdecl$code
-        # newCode[[3]] <- eval(BUGSdecl$valueExpr, distributions$matchCallEnv)
         newCode[[3]] <- evalInDistsMatchCallEnv(BUGSdecl$valueExpr)
         
         BUGSdeclClassObject <- BUGSdeclClass$new()
@@ -553,6 +558,7 @@ modelDefClass$methods(reparameterizeDists = function() {
         if(!(distName %in% getDistributionsInfo('namesVector')))    stop('unknown distribution name: ', distName)      ## error if the distribution isn't something we recognize
         distRule <- getDistribution(distName)
         numArgs <- length(distRule$reqdArgs)
+        if(numArgs==0) next; ## a user-defined distribution might have 0 arguments
         newValueExpr <- quote(dist())       ## set up a parse tree for the new value expression
         newValueExpr[[1]] <- as.name(distName)     ## add in the distribution name
         newValueExpr[1 + (1:numArgs)] <- rep(NA, numArgs)      ## fill in the new parse tree with required arguments
@@ -958,9 +964,6 @@ modelDefClass$methods(genNodeInfo3 = function(debug = FALSE) {
         ## 
         if(!all(useContext)) {
             if(!any(useContext)) {
-                ##    BUGSdecl$replacementsEnv <- NULL
-                ##   BUGSdecl$unrolledIndicesMatrix <- matrix(nrow = 0, ncol = 0)
-                ##   next
                 ## A line that is in contexts but doesn't use any of them can arise from lifting.  In such a case, keep only the first row.
                 boolUse <- c(TRUE, rep(FALSE, BUGSdecl$outputSize-1))
             } else {
@@ -1029,14 +1032,13 @@ expandContextAndReplacements <- function(allReplacements, allReplacementNameExpr
     useContext <- rep(TRUE, numContexts)
     
     valueVarNames <- if(numContexts > 0) paste0("INDEXVALUE_", 1:numContexts, "_") else character(0)
-## indexRecordingCode gives lines of code like "INDEXVALUE_1_[iAns] <- i". This will later have its name changed to "i"
+    ## indexRecordingCode gives lines of code like "INDEXVALUE_1_[iAns] <- i". This will later have its name changed to "i"
     indexRecordingCode <- vector('list', length = numContexts)
     for(i in seq_along(context$singleContexts)) {
         if(useContext[i])
             indexRecordingCode[[i]] <- substitute(V[iAns] <- index, list(V = as.name(valueVarNames[i]), index = context$singleContexts[[i]]$indexVarExpr))
     }
 
-    ##    numReplacements <- length(BUGSdecl$replacements)
     numReplacements <- length(allReplacements)
     useReplacement <- unlist(lapply(allReplacementNameExprs, function(x) { ## do not use replacements that are identical to indexVars
         for(i in seq_along(context$singleContexts)) {
@@ -1258,8 +1260,11 @@ splitVertices <- function(var2vertexID, unrolledBUGSindices, indexExprs = NULL, 
     allScalar <- TRUE
     vectorIndices <- lapply(parentIndexNamePieces, function(x) {if(is.list(x)) {allScalar <<- FALSE; return(TRUE)}; FALSE})
 
-    ## step 4 evaporated    
-    currentVertexCounts <- tabulate(var2vertexID, maxVertexID)
+        ## step 4 evaporated
+        if(all(is.na(var2vertexID)))
+            currentVertexCounts <- rep(0, maxVertexID)
+        else
+            currentVertexCounts <- tabulate(var2vertexID, max(max(var2vertexID, na.rm = TRUE), maxVertexID))
     ## 5. Set up initial table of vertexIDcounts
 
     ## 6. All scalar case: iterate or vectorize via cbind and put new vertexIDs over -1s
@@ -1405,7 +1410,6 @@ collectEdges <- function(var2vertexID, unrolledBUGSindices, targetIDs, indexExpr
                 }
             } else {
                 if(length(parentIndexNamePieces)==1) varIndicesToUse <- rep(as.numeric(parentExprReplaced[[3]]), length(targetIDs))
-##              if(length(parentIndexNamePieces)==1) varIndicesToUse <- rep(parentIndexNamePieces[[1]], length(targetIDs))
                 else {
                     varIndicesToUse <- matrix(0, nrow = 1, ncol = length(parentIndexNamePieces))
                     for(iI in 1:ncol(varIndicesToUse)) varIndicesToUse[1, iI] <- as.numeric(parentExprReplaced[[iI+2]])
@@ -1424,11 +1428,9 @@ collectEdges <- function(var2vertexID, unrolledBUGSindices, targetIDs, indexExpr
             newIndexExprs <- lapply(replacementNameExprs, function(x) substitute(unrolledBUGSindices[iRow, iCol], list(X = x, iCol = colNums[as.character(x)])))
             accessExpr <- eval( substitute( substitute(AE, newIndexExprs), list(AE = parentExprReplaced) ) )
             iRowRange <- (1:nrow(unrolledBUGSindices))
-      ##      maxNewEdges <- nrow(unrolledBUGSindices) * prod(dim(var2vertexID))
         } else {
             accessExpr <- parentExprReplaced
             iRowRange <- 1
-      ##      maxNewEdges <- prod(dim(var2vertexID))
         }
         accessExpr[[2]] <- quote(var2vertexID)
 
@@ -1436,26 +1438,6 @@ collectEdges <- function(var2vertexID, unrolledBUGSindices, targetIDs, indexExpr
         edgesFrom <- do.call('c', uniqueCurrentVertexIDsList)
         edgesToList <- lapply(iRowRange, function(iRow) rep(targetIDs[iRow], length(unique(as.numeric(eval(accessExpr))))))
         edgesTo <- do.call('c', edgesToList)
-
-        ## iNextNewEdge <- 1
-        ## edgesFromOld <- integer(maxNewEdges)
-        ## edgesToOld <- integer(maxNewEdges)
-        
-        ## for(iRow in iRowRange) {
-        ##     currentVertexIDblock <- eval(accessExpr)
-        ##     uniqueCurrentVertexIDs <- unique(as.numeric(currentVertexIDblock))
-        ##     numNewEdges <- length(uniqueCurrentVertexIDs)
-        ##     edgesFromOld[iNextNewEdge - 1 + 1:numNewEdges] <- uniqueCurrentVertexIDs
-        ##     edgesToOld[iNextNewEdge - 1 + 1:numNewEdges] <- targetIDs[iRow]
-        ##     iNextNewEdge <- iNextNewEdge + numNewEdges
-        ## }
-        ## edgesFromOld <- edgesFromOld[1:(iNextNewEdge-1)]
-        ## edgesToOld <- edgesToOld[1:(iNextNewEdge-1)]
-
-        ## if(length(edgesFrom) != length(edgesFromOld) | length(edgesTo) != length(edgesToOld) | max(abs(edgesFrom - edgesFromOld)) > 0 | max(abs(edgesTo - edgesToOld)) > 0) {
-        ##     print('caught discrepancy')
-        ##     browser()
-        ## }
     }
     list(edgesFrom = edgesFrom, edgesTo = edgesTo)    
 }
@@ -1471,7 +1453,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     vars_2_nodeOrigID <- new.env()     ## IDs for node function labels, e.g. for x[1:4] might be (NA, NA, NA, 2) if x[1:3] is RHS-only and x[4] is LHS
     vars_2_vertexOrigID <- new.env()   ## IDs for node labels, e.g. x[1:4] might be: 1, 1, 1, 2
     vars2LogProbName <- new.env()      ## e.g. "x" might be "logProb_x" if it has any LHS
-    vars2LogProbID <- new.env()        ## yiels LogProbIDs, which are not sorted in any way and we might move away from.
+    ##vars2LogProbID <- new.env()        ## yiels LogProbIDs, which are not sorted in any way and we might move away from.
 
     ## 1b. set up variables in all the environments
     for(iV in seq_along(varInfo)) {
@@ -1480,12 +1462,12 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
         if(varInfo[[iV]]$nDim > 0) {
             vars_2_nodeOrigID[[varName]] <- array(as.numeric(NA), dim = varInfo[[iV]]$maxs)
             vars2LogProbName[[varName]] <- array(dim = varInfo[[iV]]$maxs)
-            vars2LogProbID[[varName]] <- array(dim = varInfo[[iV]]$maxs)
+           ## vars2LogProbID[[varName]] <- array(dim = varInfo[[iV]]$maxs)
             storage.mode(vars2LogProbName[[varName]]) <- 'character'
         } else {
             vars_2_nodeOrigID[[varName]] <- as.numeric(NA)
             vars2LogProbName[[varName]] <- as.character(NA)
-            vars2LogProbID[[varName]] <- as.numeric(NA)
+            ##vars2LogProbID[[varName]] <- as.numeric(NA)
         }
     }
 
@@ -1590,10 +1572,10 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
                 IDassignCode <- insertSubIndexExpr(targetExprWithMins, quote(iAns))
                 BUGSdecl$replacementsEnv[['logProbIDs']] <- newLogProbIDs
                 forCode <- substitute( for(iAns in 1:OUTPUTSIZE) ASSIGNCODE <- logProbIDs[iAns], list(OUTPUTSIZE = BUGSdecl$outputSize, ASSIGNCODE = IDassignCode) )
-                BUGSdecl$replacementsEnv[[lhsVar]] <- vars2LogProbID[[lhsVar]]
-                eval(forCode, envir = BUGSdecl$replacementsEnv)
-                vars2LogProbID[[lhsVar]] <- BUGSdecl$replacementsEnv[[lhsVar]]
-                rm(list = c(lhsVar, 'logProbIDs'), envir = BUGSdecl$replacementsEnv)
+##                BUGSdecl$replacementsEnv[[lhsVar]] <- vars2LogProbID[[lhsVar]]
+##                eval(forCode, envir = BUGSdecl$replacementsEnv)
+##                vars2LogProbID[[lhsVar]] <- BUGSdecl$replacementsEnv[[lhsVar]]
+##                rm(list = c(lhsVar, 'logProbIDs'), envir = BUGSdecl$replacementsEnv)
 
                 BUGSdecl$replacementsEnv[['logProbIDs']] <- newLogProbNames
                 BUGSdecl$replacementsEnv[[lhsVar]] <- vars2LogProbName[[lhsVar]]
@@ -1602,13 +1584,13 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
                 rm(list = c(lhsVar, 'logProbIDs'), envir = BUGSdecl$replacementsEnv)
             } else {
                 ## If no replacementsEnv was set up, then there were no index variables (only numerics)
-                eval(substitute(A <- B, list(A = targetExprWithMins, B = newLogProbIDs)), envir = vars2LogProbID)
+##                eval(substitute(A <- B, list(A = targetExprWithMins, B = newLogProbIDs)), envir = vars2LogProbID)
                 eval(substitute(A <- B, list(A = targetExprWithMins, B = newLogProbNames)), envir = vars2LogProbName)
             }
         } else { ## nDim == 0
             logProbNames <- c(logProbNames, logProbVarName)
             logProbIDs <- c(logProbIDs, nextLogProbID)
-            vars2LogProbID[[lhsVar]] <- nextLogProbID
+            ##vars2LogProbID[[lhsVar]] <- nextLogProbID
             vars2LogProbName[[lhsVar]] <- logProbVarName
             nextLogProbID <- nextLogProbID + 1
         }
@@ -1629,7 +1611,8 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     ##             for(i in 1:2) z[i] <- x[i]
     ##    From above, there is a nodeOrigID for "x[1:2]"
     ##    But now, based on the RHS usage of x[1] and x[2], there needs to be a separate vertexID for each of them
-    ##    
+    ##
+    if(debug) browser()
     nextVertexID <- maxOrigNodeID+1 ## origVertexIDs start after origNodeIDs.  These will be sorted later.
     for(iDI in seq_along(declInfo)) {  ## Iterate over BUGS declarations (lines)
         BUGSdecl <- declInfo[[iDI]]
@@ -1886,7 +1869,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     maps$types <<- types[newGraphID_2_oldGraphID]
     maps$notStoch <<- maps$types != 'stoch'
     maps$nodeNamesLHSall <<- nodeNamesLHSall
-    maps$nodeNamesRHSonly <<- nodeNamesRHSonly
+    maps$nodeNamesRHSonly <<- maps$graphID_2_nodeName[maps$types == 'RHSonly'] ##nodeNamesRHSonly
     maps$nodeNames <<- maps$graphID_2_nodeName
     if(any(duplicated(maps$nodeNames))) stop(paste0("Error building model, there are multiple definitions for nodes:", paste(maps$nodeNames[duplicated(maps$nodeNames)], collapse = ',')))
     if(debug) browser()
@@ -1906,9 +1889,13 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     if(debug) browser()
 
     maps$vars2LogProbName <<- vars2LogProbName
-    maps$vars2LogProbID <<- vars2LogProbID
-    maps$logProbIDs_2_LogProbName <<- logProbNames
+##    maps$vars2LogProbID <<- vars2LogProbID
+##    maps$logProbIDs_2_LogProbName <<- logProbNames
 
+    graphID_2_logProbName <- paste0("logProb_", gsub(":[0123456789]+", "", maps$graphID_2_nodeName))
+    graphID_2_logProbName[ maps$types != "stoch"] <- NA
+    maps$graphID_2_logProbName <<- graphID_2_logProbName
+    
     maps$edgesFrom <<- oldGraphID_2_newGraphID[edgesFrom]
     maps$edgesTo <<- oldGraphID_2_newGraphID[edgesTo]
     maps$edgesParentExprID <<- edgesParentExprID
@@ -1918,10 +1905,29 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     maps$edgesFrom2To <<- split(maps$edgesTo, fedgesFrom)
     maps$edgesFrom2ParentExprID <<- split(maps$edgesParentExprID, fedgesFrom)
     maps$graphIDs <<- 1:length(maps$graphID_2_nodeName)
-    
+
+    maps$nimbleGraph <<- nimbleGraphClass()
+    maps$nimbleGraph$setGraph(maps$edgesFrom, maps$edgesTo, maps$edgesParentExprID, maps$types, maps$graphID_2_nodeName, length(maps$graphID_2_nodeName))
 ##    maps$nodeName_2_graphID <<- list2env( nodeName2GraphIDs(maps$nodeNames) )
 ##    maps$nodeName_2_logProbName <<- list2env( nodeName2LogProbName(maps$nodeNames) )
-    
+
+    ## A new need for new node function system:
+    graphID_2_unrolledIndicesMatrixRow <- rep(-1L, (length(maps$graphIDs)))
+    for(iDI in seq_along(declInfo)) {
+        BUGSdecl <- declInfo[[iDI]]
+        unrolledRows <- nrow(BUGSdecl$unrolledIndicesMatrix)
+        if(unrolledRows == 0) {
+            if(BUGSdecl$numUnrolledNodes == 1) ## a singleton declaration
+                graphID_2_unrolledIndicesMatrixRow[BUGSdecl$graphIDs] <- 0
+            else
+                stop(paste('confused assigning unrolledIndicesMatrixRow in case with no unrolledRows by numUnrolledNodes != 1 for code', deparse(BUGSdecl$code)))
+        } else {
+            theseGraphIDs <- BUGSdecl$graphIDs
+            graphID_2_unrolledIndicesMatrixRow[theseGraphIDs] <- 1:length(theseGraphIDs)
+        }
+    }
+    graphID_2_unrolledIndicesMatrixRow[graphID_2_unrolledIndicesMatrixRow==-1] <- NA
+    maps$graphID_2_unrolledIndicesMatrixRow <<- graphID_2_unrolledIndicesMatrixRow
     NULL
 })
 
@@ -2004,7 +2010,8 @@ modelDefClass$methods(genVarInfo3 = function() {
             }
             if(varInfo[[rhsVar]]$nDim > 0) {
                 for(iDim in 1:varInfo[[rhsVar]]$nDim) {
-                    indexNamePieces <- BUGSdecl$parentIndexNamePieces[[iV]][[iDim]] 
+                    indexNamePieces <- BUGSdecl$parentIndexNamePieces[[iV]][[iDim]]
+                    if(is.null(indexNamePieces)) stop(paste0('There is a problem with some indexing in this line: ', deparse(BUGSdecl$codeReplaced), '.\nOne way this can happen is if you wanted to provide a vector of indices but did not include it in constants.'))
                     if(is.list(indexNamePieces)) { ## a list would be made if there is a ':' operator in the index expression
                         indsLow <- if(is.numeric(indexNamePieces[[1]])) indexNamePieces[[1]] else BUGSdecl$replacementsEnv[[ indexNamePieces[[1]] ]]
                         indsHigh <- if(is.numeric(indexNamePieces[[2]])) indexNamePieces[[2]] else BUGSdecl$replacementsEnv[[ indexNamePieces[[2]] ]]
@@ -2063,7 +2070,7 @@ modelDefClass$methods(buildSymbolTable = function() {
 })
 
 
-modelDefClass$methods(newModel = function(data = list(), inits = list(), where = globalenv(), modelName = character(), check = getNimbleOption('checkModel'), debug = FALSE) {
+modelDefClass$methods(newModel = function(data = list(), inits = list(), where = globalenv(), modelName = character(), check = getNimbleOption('checkModel'), calculate = TRUE, debug = FALSE) {
     if(debug) browser()
     if(inherits(modelClass, 'uninitializedField')) {
         vars <- lapply(varInfo, `[[`, 'maxs')
@@ -2117,10 +2124,20 @@ modelDefClass$methods(newModel = function(data = list(), inits = list(), where =
         warning("newModel: ", paste(names(inits)[nonVarIndices], collapse = ','),
                 " ", ifelse(sum(nonVarIndices) > 1, "are", "is"), " not ", ifelse(sum(nonVarIndices) > 1, "variables", "a variable"), " in the model; initial value ignored.")
     model$setInits(inits[!nonVarIndices])
-    ## model checking
-    ## added by DT, June 2015
+    ## basic size/dimension, NA checking
+    if(calculate) {
+        if(nimbleOptions('verbose')) message("running calculate on model (any error reports that follow may simply reflect missing values in model variables) ... ", appendLF = FALSE)
+        result <- try(model$calculate(), silent = TRUE)
+        if(nimbleOptions('verbose')) 
+            if(is(result, 'try-error')) 
+                message(geterrmessage()) else message("")  # this ensures a single newline is included
+    }
+    if(nimbleOptions('verbose')) message("checking model sizes and dimensions...", appendLF = FALSE)
+    model$checkBasics()
+    if(nimbleOptions('verbose')) message("")  # appends newline   
+    ## extended model checking via calculate; disabled by default as of July 2016
     if(check) {
-        if(nimbleOptions('verbose')) message("checking model...   (use nimbleModel(..., check = FALSE) to skip model check)")
+        if(nimbleOptions('verbose')) message("checking model calculations...")
         model$check()
     }
     fixRStudioHanging(model)
@@ -2158,70 +2175,127 @@ modelDefClass$methods(printDI = function() {
     }
 })
 
-
+modelDefClass$methods(graphIDs2indexedNodeInfo = function(graphIDs) {
+    declIDs <- maps$graphID_2_declID[graphIDs]
+    rowIndices <- maps$graphID_2_unrolledIndicesMatrixRow[graphIDs]
+    list(declIDs = declIDs, unrolledIndicesMatrixRows = rowIndices)
+})
 
 modelDefClass$methods(nodeName2GraphIDs = function(nodeName, nodeFunctionID = TRUE){
     if(length(nodeName) == 0)
         return(NULL)
-
-    ## if(!is.null(attr(nodeName, 'nodeName'))) { ## we know the input has fully formed node names, not just arbitrary blocks of variables
-    ##     output <- unlist(mget(nodeName, maps$nodeName_2_graphID, ifnotfound = NA))
-    ##     return(output[!is.na(output)])
-    ## }
-    
-    if(nodeFunctionID) 
+    if(nodeFunctionID) {
         ##		output <- unique(unlist(sapply(nodeName, parseEvalNumeric, env = maps$vars2GraphID_functions, USE.NAMES = FALSE)))
         ## old system had IDs for RHSonly things here.  This puts that back in for now.
-        output <- unique(unlist(sapply(nodeName, parseEvalNumeric, env = maps$vars2GraphID_functions_and_RHSonly, USE.NAMES = FALSE)))
-    else
+        ##output <- unique(unlist(sapply(nodeName, parseEvalNumeric, env = maps$vars2GraphID_functions_and_RHSonly, USE.NAMES = FALSE)))
+        output2 <- unique(parseEvalNumericMany(nodeName, env = maps$vars2GraphID_functions_and_RHSonly))
+        ##if(!identical(as.numeric(output), as.numeric(output2))) browser()
+    } else {
         ##output <- unlist(sapply(nodeName, parseEvalNumeric, env = maps$vars2GraphID_values, USE.NAMES = FALSE))	
         ## old system here would always return *scalar* IDs. Those are now element IDs, and they are not in the graph.  Only uses should be transient, e.g. to get back to names
-        output <- unlist(sapply(nodeName, parseEvalNumeric, env = maps$vars2ID_elements, USE.NAMES = FALSE))	
+        ##output <- unlist(sapply(nodeName, parseEvalNumeric, env = maps$vars2ID_elements, USE.NAMES = FALSE))	
+        output2 <- unique(parseEvalNumericMany(nodeName, env = maps$vars2ID_elements))
+        ##if(!identical(as.numeric(output), as.numeric(output2))) browser()
+    }
+    output <- output2
     return(output[!is.na(output)])
 })
 
 ## next two functions work for properly formed nodeNames.
 modelDefClass$methods(nodeName2LogProbName = function(nodeName){ ## used in 3 places: MCMC_build, valuesAccessorVector, and cppInterfaces_models
     ## This function needs better processing.
-    
-    
     if(length(nodeName) == 0)
         return(NULL)
-##    output <- unique(unlist(sapply(nodeName, parseEvalCharacter, env = maps$vars2LogProbName, USE.NAMES = FALSE)))
+    
+##     ## 1. so this needs to first get to a nodeFunctionID
+##     graphIDs <- unique(unlist(sapply(nodeName, parseEvalNumeric, env = maps$vars2GraphID_functions, USE.NAMES = FALSE)))
+##     ## 2. get node function names
+##     fullNodeNames <- maps$graphID_2_nodeName[graphIDs]
+##     ## 3 get corresponding logProbNames
+##     output <- unique(unlist(sapply(fullNodeNames, parseEvalCharacter, env = maps$vars2LogProbName, USE.NAMES = FALSE)))
+
+##     ##graphIDs2 <- unique(parseEvalNumericMany(nodeName, env = maps$vars2GraphID_functions))
+##     ##fullNodeNames2 <- maps$graphID_2_nodeName[graphIDs2]
+##     ##output2 <- unique(parseEvalCharacterMany(fullNodeNames2, env = maps$vars2LogProbName))
+## ##    output2 <- unique(parseEvalCharacterMany(nodeName, env = maps$vars2LogProbName)) ## output2
+## ##    if(!identical(output[!is.na(output)], as.character(output2[!is.na(output2)]))) browser()
+##     output <- output[!is.na(output)]
+
+    graphIDs2 <- unique(parseEvalNumericMany(nodeName, env =  maps$vars2GraphID_functions))
+    output2 <- maps$graphID_2_logProbName[graphIDs2]
+    output2 <- output2[!is.na(output2)]
+
+    ## fullNodeNames2 <- maps$graphID_2_nodeName[graphIDs [maps$types[graphIDs] == "stoch"] ]
+    ## output2 <- gsub(":[0123456789]+", "", fullNodeNames2 )
+    ## output2 <- output2[!is.na(output2)]
+    ## output2 <- paste0("logProb_", output2)
+##    if(!identical(output, output2)) browser()
+
+##    output <- output2
+    return(output2)
 ##    return(output[!is.na(output)])
-
-    ## if(!is.null(attr(nodeName, 'nodeName'))) { ## we know the input has fully formed node names, not just arbitrary blocks of variables
-    ##     output <- unlist(mget(nodeName, maps$nodeName_2_logProbNodeName, ifnotfound = NA))
-    ##     return(output[!is.na(output)])
-    ## }
-    
-    ## 1. so this needs to first get to a nodeFunctionID
-    graphIDs <- unique(unlist(sapply(nodeName, parseEvalNumeric, env = maps$vars2GraphID_functions, USE.NAMES = FALSE)))
-##    eval(parse(text="w1[3:4, 1:2]", keep.source = FALSE)[[1]], envir= maps$vars2GraphID_functions)
-
-    
-    ## 2. get node function names
-    fullNodeNames <- maps$graphID_2_nodeName[graphIDs]
-    ## 3 get corresponding logProbNames
-    output <- unique(unlist(sapply(fullNodeNames, parseEvalCharacter, env = maps$vars2LogProbName, USE.NAMES = FALSE)))
-    return(output[!is.na(output)])
 })
 
-modelDefClass$methods(nodeName2LogProbID = function(nodeName){ ## used only in cppInterfaces_models
-    ## I think this will only work if nodeName is already ensured to be a node function name
-	if(length(nodeName) == 0)
-		return(NULL)
-	output <- unique(unlist(sapply(nodeName, parseEvalNumeric, env = maps$vars2LogProbID, USE.NAMES = FALSE) ) ) 
-	return(output[!is.na(output)])
-})
+## modelDefClass$methods(nodeName2LogProbID = function(nodeName){ ## used only in cppInterfaces_models
+##     ## I think this will only work if nodeName is already ensured to be a node function name
+## 	if(length(nodeName) == 0)
+## 		return(NULL)
+## 	output <- unique(unlist(sapply(nodeName, parseEvalNumeric, env = maps$vars2LogProbID, USE.NAMES = FALSE) ) ) 
+## 	return(output[!is.na(output)])
+## })
 
 parseEvalNumeric <- function(x, env){
-	ans <- eval(parse(text = x, keep.source = FALSE)[[1]], envir = env)
-	as.numeric(ans)
+    ans <- eval(parse(text = x, keep.source = FALSE)[[1]], envir = env)
+    as.numeric(ans)
 }
+
+parseEvalNumericManyFindErrors <- function(x, env) {
+    problems <- list()
+    for(thisx in x) {
+        oneResult <- try(parseEvalNumeric(thisx, env), silent = TRUE)
+        if(inherits(oneResult, 'try-error')) {
+            problems[[ length(problems) + 1]] <- oneResult[1]
+            if(length(problems) >= 10)
+                return(problems)
+        }
+    }
+    return(problems)
+}
+
+parseEvalNumericManyHandleError <- function(cond, x, env) {
+    problems <- parseEvalNumericManyFindErrors(x, env)
+    if(length(problems)==0) message(paste0('There an unknown problem looking for variables ', paste0(x, collapse=','), ' in the model.\n'))
+    else {
+        message(paste0('One or more errors occurred looking for variables in a model (first 10 shown below).\n',
+                       'These messages may be cryptic, but generally the variable or expression somewhere in each message was not valid in a model:\n',
+                       paste0(unlist(problems), collapse = ''))) 
+    }
+    invokeRestart('abort')
+}
+
+parseEvalNumericMany <- function(x, env) {
+    withCallingHandlers(
+        if(length(x) > 1) {
+            as.numeric(eval(parse(text = paste0('c(', paste0(x, collapse=','),')'), keep.source = FALSE)[[1]], envir = env))
+        } else 
+            as.numeric(eval(parse(text = x, keep.source = FALSE)[[1]], envir = env))
+       ,
+        error = function(cond) {
+           parseEvalNumericManyHandleError(cond, x, env)
+        }
+    )
+}
+
 parseEvalCharacter <- function(x, env){
-	ans <- eval(parse(text = x, keep.source = FALSE)[[1]], envir = env)
-	as.character(ans)
+    ans <- eval(parse(text = x, keep.source = FALSE)[[1]], envir = env)
+    as.character(ans)
+}
+
+parseEvalCharacterMany <- function(x, env){
+    if(length(x) > 1) {
+        return(as.character(eval(parse(text = paste0('c(', paste0(x, collapse=','),')'), keep.source = FALSE)[[1]], envir = env)))
+    } else 
+        as.character(eval(parse(text = x, keep.source = FALSE)[[1]], envir = env))
 }
 
 getDependencyPaths <- function(nodeID, maps, nodeIDrow = NULL) {
@@ -2232,7 +2306,6 @@ getDependencyPaths <- function(nodeID, maps, nodeIDrow = NULL) {
         nodeAndPEID_list <- split(cbind(newNodes, newPEIDs, deparse.level = 0), seq_along(newNodes))
         ans <- do.call('c', lapply(nodeAndPEID_list, 
                function(x) {
-          ##         browser()
                    if(maps$notStoch[x[1]]) ## not stochastic so recurse
                        ans2 <- lapply(getDependencyPaths(x[1], maps = maps, nodeIDrow = x),
                                       function(z) rbind(nodeIDrow, z, deparse.level = 0))

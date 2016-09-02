@@ -109,7 +109,6 @@ nimbleFunction <- function(setup         = NULL,
     formals(generatorFunction) <- nf_createGeneratorFunctionArgs(setup, parent.frame())
 
     .globalSetupEnv <- new.env()
-##    browser()
     if(!is.null(globalSetup)) {
         if(!is.function(globalSetup)) stop('If globalSetup is not NULL, it must be a function', call. = FALSE)
         if(!length(formals(globalSetup))==0) stop('globalSetup cannot take input arguments', call. = FALSE)
@@ -161,14 +160,10 @@ nf_createRefClassDef <- function(setup, methodList, className = nf_refClassLabel
 
 ## creates a list of the fields (setupOutputs) for a nimble function reference class
 nf_createRefClassDef_fields <- function(setup, methodList, globalSetup, declaredSetupOutputNames) {
-##    setupOutputsDeclaration <- nf_processSetupFunctionBody(setup, returnSetupOutputDeclaration = TRUE)
     setupOutputNames <- nf_createSetupOutputNames(setup, methodList, declaredSetupOutputNames, globalSetup)
     if(FALSE) print(setupOutputNames)
     fields <- as.list(rep('ANY', length(setupOutputNames)))
     names(fields) <- setupOutputNames
-  #  fields$.generatorFunction = 'ANY'
-  #  fields$.CobjectInterface <- 'ANY'
-  #  fields$.newSetupLinesProcessed <- 'ANY'
     return(fields)
 }
 
@@ -205,7 +200,16 @@ nf_createAllNamesFromMethodList <- function(methodList) {
 
 nf_getNamesFromSetupOutputDeclaration <- function(setupOutputsDeclaration) {
     if(setupOutputsDeclaration[[1]] != 'setupOutputs') stop('something went wrong')
-    return(unlist(lapply(setupOutputsDeclaration[-1], function(so) { if(is.call(so)) stop('cannot have a call inside setupOuts() declaration') else deparse(so) } )))
+    return(unlist(lapply(setupOutputsDeclaration[-1], function(so) { if(is.call(so)) stop('cannot have a call inside setupOutputs() declaration') else deparse(so) } )))
+}
+
+## processing of all objects to become NF member data
+nf_preProcessMemberDataObject <- function(obj) {
+    if(is(obj, 'CmodelBaseClass')) {
+        warning('This nimbleFunction was passed a *compiled* model object.\nInstead, the corresponding *uncompiled* model object was used.', call. = FALSE)
+        return(obj$Rmodel)
+    }
+    return(obj)
 }
 
 ## definition for the nimble function generator (specializer)
@@ -215,10 +219,10 @@ nf_createGeneratorFunctionDef <- function(setup) {
             SETUPCODE                    # execute setupCode
             nfRefClassObject <- nfRefClass()   # create an object of the reference class
             nfRefClassObject$.generatorFunction <- generatorFunction   # link upwards to get the generating function of this nf
-                                        # assign setupOutputs into reference class object
+            ## assign setupOutputs into reference class object
             if(!nimbleOptions()$compileOnly)
-                for(.var_unique_name_1415927 in .namesToCopyFromGlobalSetup)    { nfRefClassObject[[.var_unique_name_1415927]] <- get(.var_unique_name_1415927, envir = .globalSetupEnv) }
-            for(.var_unique_name_1415927 in .namesToCopyFromSetup)    { nfRefClassObject[[.var_unique_name_1415927]] <- get(.var_unique_name_1415927) }
+                for(.var_unique_name_1415927 in .namesToCopyFromGlobalSetup)    { nfRefClassObject[[.var_unique_name_1415927]] <- nf_preProcessMemberDataObject(get(.var_unique_name_1415927, envir = .globalSetupEnv)) }
+            for(.var_unique_name_1415927 in .namesToCopyFromSetup)    { nfRefClassObject[[.var_unique_name_1415927]] <- nf_preProcessMemberDataObject(get(.var_unique_name_1415927)) }
             return(nfRefClassObject)
         },
         list(SETUPCODE = nf_processSetupFunctionBody(setup, returnCode = TRUE)))
