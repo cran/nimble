@@ -7,6 +7,7 @@ nimbleUserNamespace <- as.environment(list(sessionSpecificDll = NULL))
 # These options are for development use at this point.
 .nimbleOptions <- as.environment(
     list(
+        pauseAfterWritingFiles = FALSE,
         convertSingleVectorsToScalarsInSetupArgs = TRUE,
         messagesWhenBuildingOrFinalizingCppObjects = FALSE,
         indexDrop = TRUE,
@@ -37,6 +38,8 @@ nimbleUserNamespace <- as.environment(list(sessionSpecificDll = NULL))
         ## rather than the older 'static' system.
         ## update May 2016: old (non-dynamic) system is no longer supported -DT
         ##useDynamicConjugacy = TRUE,
+
+        MCMCprogressBar = TRUE,
         
         ## default settings for MCMC samplers
         MCMCcontrolDefaultList = list(
@@ -49,6 +52,11 @@ nimbleUserNamespace <- as.environment(list(sessionSpecificDll = NULL))
             propCov = 'identity',
             sliceWidth = 1,
             sliceMaxSteps = 100,
+            factorBurnIn = 15000,
+            factorAdaptInterval = 1000,
+            scaleAdaptInterval = 200,
+            sliceBurnIn = 512,
+            sliceWidths = 'oneVec',
             pfNparticles = 1000,
             pfResample = FALSE,
             pfOptimizeNparticles = FALSE,

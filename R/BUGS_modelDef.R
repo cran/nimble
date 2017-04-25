@@ -126,15 +126,15 @@ modelDefClass <- setRefClass('modelDefClass',
 ##     further, nameMashupFromExpr(expr) in nimbleBUGS_utils.R throws an error if expr contains a ':'
 ##
 ## set v3 = FALSE to use old processing
-modelDefClass$methods(setupModel = function(code, constants, dimensions, debug = FALSE) {
+modelDefClass$methods(setupModel = function(code, constants, dimensions, userEnv, debug = FALSE) {
     if(debug) browser()
-    code <- codeProcessIfThenElse(code, parent.frame()) ## evaluate definition-time if-then-else
+    code <- codeProcessIfThenElse(code, constants, userEnv) ## evaluate definition-time if-then-else
     setModelValuesClassName()         ## uses 'name' field to set field: modelValuesClassName
     assignBUGScode(code)              ## uses 'code' argument, assigns field: BUGScode.  puts codes through nf_changeNimKeywords
     assignConstants(constants)        ## uses 'constants' argument, sets fields: constantsEnv, constantsList, constantsNamesList
     assignDimensions(dimensions)      ## uses 'dimensions' argument, sets field: dimensionList
     initializeContexts()              ## initializes the field: contexts
-    processBUGScode()                 ## uses BUGScode, sets fields: contexts, declInfo$code, declInfo$contextID
+    processBUGScode(userEnv = userEnv)                 ## uses BUGScode, sets fields: contexts, declInfo$code, declInfo$contextID
     ## We will try to infer sizes later
     ##addMissingIndexing()              ## overwrites declInfo, using dimensionsList, fills in any missing indexing
     splitConstantsAndData()           ## deals with case when data is passed in as constants
@@ -166,20 +166,30 @@ modelDefClass$methods(setupModel = function(code, constants, dimensions, debug =
     return(NULL)        
 })
 
-codeProcessIfThenElse <- function(code, envir = parent.frame()) {
+codeProcessIfThenElse <- function(code, constants, envir = parent.frame()) {
     codeLength <- length(code)
     if(code[[1]] == '{') {
-        if(codeLength > 1) for(i in 2:codeLength) code[[i]] <- codeProcessIfThenElse(code[[i]], envir)
+        if(codeLength > 1) for(i in 2:codeLength) code[[i]] <- codeProcessIfThenElse(code[[i]], constants, envir)
         return(code)
-    } else {
-        if(codeLength > 1) if(code[[1]] == 'if') {
-            evaluatedCondition <- eval(code[[2]], envir = envir)
-            if(evaluatedCondition) return(codeProcessIfThenElse(code[[3]])) else {
-                if(length(code) == 4) return(codeProcessIfThenElse(code[[4]]))
+    } 
+    if(code[[1]] == 'for') {
+        code[[4]] <- codeProcessIfThenElse(code[[4]], constants, envir)
+        return(code)
+    }
+    if(codeLength > 1)
+        if(code[[1]] == 'if') {
+            constantsEnv <- as.environment(constants)
+            parent.env(constantsEnv) <- envir
+            evaluatedCondition <- eval(code[[2]], constantsEnv)
+            if(evaluatedCondition) return(codeProcessIfThenElse(code[[3]], constants, envir))
+            else {
+                if(length(code) == 4) return(codeProcessIfThenElse(code[[4]], constants, envir))
                 else return(NULL)
             }
-        } else return(code) else return(code)
-    }
+        } else
+            return(code)
+    else
+        return(code)
 }
 
 modelDefClass$methods(setModelValuesClassName = function() {
@@ -250,7 +260,7 @@ reprioritizeColonOperator <- function(code) {
     return(code)
 }
 
-modelDefClass$methods(processBUGScode = function(code = NULL, contextID = 1, lineNumber = 0) {
+modelDefClass$methods(processBUGScode = function(code = NULL, contextID = 1, lineNumber = 0, userEnv) {
     ## uses BUGScode, sets fields: contexts, declInfo$code, declInfo$contextID.
     ## all processing of code is done by BUGSdeclClass$setup(code, contextID).
     ## all processing of contexts is done by BUGScontextClass$setup()
@@ -266,7 +276,7 @@ modelDefClass$methods(processBUGScode = function(code = NULL, contextID = 1, lin
             BUGSdeclClassObject <- BUGSdeclClass$new() ## record the line number (a running count of non-`{` lines) for use in naming nodeFunctions later
             if(code[[i]][[1]] == '~') {
                 code[[i]] <- replaceDistributionAliases(code[[i]])
-                checkUserDefinedDistribution(code[[i]])
+                checkUserDefinedDistribution(code[[i]], userEnv)
             }
             if(code[[i]][[1]] == '<-')
                 checkForDeterministicDorR(code[[i]])
@@ -296,10 +306,10 @@ modelDefClass$methods(processBUGScode = function(code = NULL, contextID = 1, lin
             } else {
                 substitute( {ONELINE}, list(ONELINE = code[[i]][[4]]))
             }
-            lineNumber <- processBUGScode(recurseCode, nextContextID, lineNumber = lineNumber)  ## Recursive call to process the contents of the for loop
+            lineNumber <- processBUGScode(recurseCode, nextContextID, lineNumber = lineNumber, userEnv = userEnv)  ## Recursive call to process the contents of the for loop
         }
         if(code[[i]][[1]] == '{') {  ## recursive call to a block contained in a {}, perhaps as a result of processCodeIfThenElse
-            lineNumber <- processBUGScode(code[[i]], contextID, lineNumber = lineNumber)
+            lineNumber <- processBUGScode(code[[i]], contextID, lineNumber = lineNumber, userEnv = userEnv)
         }
         if(!deparse(code[[i]][[1]]) %in% c('~', '<-', 'for', '{')) 
             stop("Error: ", deparse(code[[i]][[1]]), " not allowed in BUGS code in ", deparse(code[[i]]))
@@ -308,13 +318,13 @@ modelDefClass$methods(processBUGScode = function(code = NULL, contextID = 1, lin
 })
 
 # check if distribution is defined and if not, attempt to register it
-checkUserDefinedDistribution <- function(code) {
+checkUserDefinedDistribution <- function(code, userEnv) {
     dist <- as.character(code[[3]][[1]])
     if(dist %in% c("T", "I")) 
         dist <- as.character(code[[3]][[2]][[1]])
     if(!dist %in% distributions$namesVector)
         if(!exists('distributions', nimbleUserNamespace) || !dist %in% nimbleUserNamespace$distributions$namesVector) {
-            registerDistributions(dist)
+            registerDistributions(dist, userEnv)
             cat("NIMBLE has registered ", dist, " as a distribution based on its use in BUGS code. Note that if you make changes to the nimbleFunctions for the distribution, you must call 'deregisterDistributions' before using the distribution in BUGS code for those changes to take effect.\n", sep = "") 
         }
 }
@@ -378,6 +388,7 @@ modelDefClass$methods(addMissingIndexing = function() {
         declInfo[[i]] <<- BUGSdeclClassObject
     }
 })
+
 addMissingIndexingRecurse <- function(code, dimensionsList) {
     if(!is.call(code)) return(code)   # returns names, numbers
     if(code[[1]] != '[') {
@@ -386,39 +397,44 @@ addMissingIndexingRecurse <- function(code, dimensionsList) {
     }
     if(code[[1]] != '[')   stop('something went wrong: expecting a [')
     ## code must be an indexing call, e.g. x[.....]
+    if(length(code[[2]]) > 1 && code[[2]][[1]] == '$'){
+      code[[2]][[2]] <- addMissingIndexingRecurse(code[[2]][[2]], dimensionsList)
+      return(code)
+    }
     if(!any(code[[2]] == names(dimensionsList))) {
-        ## dimension information was NOT provided for this variable
-        ## let's check to make sure all indexes are present
-        if(any(unlist(lapply(as.list(code), is.blank)))) {
-            stop(paste0('Opps! This part of NIMBLE is still under development.', '\n',
-                        'The model definition included the expression \'', deparse(code), '\', which contains missing indices.', '\n',
-                        'There are two options to resolve this:', '\n',
-                        '(1) Explicitly provide the missing indices in the model definition (e.g., \'', deparse(example_fillInMissingIndices(code)), '\'), or', '\n',
-                        '(2) Provide the dimensions of variable \'', code[[2]], '\' via the \'dimensions\' argument to nimbleModel(), e.g.,', '\n',
-                        '    nimbleModel(code, dimensions = list(', code[[2]], ' = ', deparse(example_getMissingDimensions(code)), '))', '\n',
-                        'Thanks for bearing with us.'), call. = FALSE)
-        }
-        ## and to recurse on all elements
-        for(i in seq_along(code))     code[[i]] <- addMissingIndexingRecurse(code[[i]], dimensionsList)
-        return(code)
+      ## dimension information was NOT provided for this variable
+      ## let's check to make sure all indexes are present
+      if(any(unlist(lapply(as.list(code), is.blank)))) {
+        stop(paste0('Opps! This part of NIMBLE is still under development.', '\n',
+                    'The model definition included the expression \'', deparse(code), '\', which contains missing indices.', '\n',
+                    'There are two options to resolve this:', '\n',
+                    '(1) Explicitly provide the missing indices in the model definition (e.g., \'', deparse(example_fillInMissingIndices(code)), '\'), or', '\n',
+                    '(2) Provide the dimensions of variable \'', code[[2]], '\' via the \'dimensions\' argument to nimbleModel(), e.g.,', '\n',
+                    '    nimbleModel(code, dimensions = list(', code[[2]], ' = ', deparse(example_getMissingDimensions(code)), '))', '\n',
+                    'Thanks for bearing with us.'), call. = FALSE)
+      }
+      ## and to recurse on all elements
+      for(i in seq_along(code))     code[[i]] <- addMissingIndexingRecurse(code[[i]], dimensionsList)
+      return(code)
     }
     if(any(code[[2]] == names(dimensionsList))) {
-        dimensions <- dimensionsList[[as.character(code[[2]])]]
-        ## dimension information WAS provided for this variable
-        ## first, just check that the dimensionality of the node is consistent
-        if(length(code) != length(dimensions)+2)   stop(paste0('inconsistent dimensionality provided for node \'', code[[2]], '\''))
-        ## then, fill in any missing indicies, and recurse on all other elements
-        for(i in seq_along(code)) {
-            if(is.blank(code[[i]])) {
-                code[[i]] <- substitute(1:TOP, list(TOP = as.numeric(dimensions[i-2])))
-            } else {
-                code[[i]] <- addMissingIndexingRecurse(code[[i]], dimensionsList)
-            }
+      dimensions <- dimensionsList[[as.character(code[[2]])]]
+      ## dimension information WAS provided for this variable
+      ## first, just check that the dimensionality of the node is consistent
+      if(length(code) != length(dimensions)+2)   stop(paste0('inconsistent dimensionality provided for node \'', code[[2]], '\''))
+      ## then, fill in any missing indicies, and recurse on all other elements
+      for(i in seq_along(code)) {
+        if(is.blank(code[[i]])) {
+          code[[i]] <- substitute(1:TOP, list(TOP = as.numeric(dimensions[i-2])))
+        } else {
+          code[[i]] <- addMissingIndexingRecurse(code[[i]], dimensionsList)
         }
-        return(code)
+      }
+      return(code)
     }
     stop('something went wrong')
 }
+
 example_fillInMissingIndices <- function(code) {
     as.call(lapply(as.list(code), function(el) if(is.blank(el)) quote(1:10) else el))
 }
@@ -568,35 +584,39 @@ modelDefClass$methods(reparameterizeDists = function() {
         if(!(distName %in% getAllDistributionsInfo('namesVector')))    stop('unknown distribution name: ', distName)      ## error if the distribution isn't something we recognize
         distRule <- getDistributionInfo(distName)
         numArgs <- length(distRule$reqdArgs)
-        if(numArgs==0) next; ## a user-defined distribution might have 0 arguments
         newValueExpr <- quote(dist())       ## set up a parse tree for the new value expression
         newValueExpr[[1]] <- as.name(distName)     ## add in the distribution name
-        newValueExpr[1 + (1:numArgs)] <- rep(NA, numArgs)      ## fill in the new parse tree with required arguments
-        names(newValueExpr)[1 + (1:numArgs)] <- distRule$reqdArgs    ## add names for the arguments
-        params <- as.list(valueExpr[-1])   ## extract the original distribution parameters
-        
-        if(identical(sort(names(params)), sort(distRule$reqdArgs))) {
+        if(numArgs==0) { ## a user-defined distribution might have 0 arguments
+          nonReqdArgExprs <- NULL
+          boundExprs <- BUGSdecl$boundExprs
+        } else {   
+          newValueExpr[1 + (1:numArgs)] <- rep(NA, numArgs)      ## fill in the new parse tree with required arguments
+          names(newValueExpr)[1 + (1:numArgs)] <- distRule$reqdArgs    ## add names for the arguments
+          
+          params <- if(length(valueExpr) > 1) as.list(valueExpr[-1]) else structure(list(), names = character()) ## extract the original distribution parameters
+          
+          if(identical(sort(names(params)), sort(distRule$reqdArgs))) {
             matchedAlt <- 0
-        } else {
+          } else {
             matchedAlt <- NULL; count <- 0
             while(is.null(matchedAlt) && count < distRule$numAlts) {
-                count <- count + 1
-                if(identical(sort(unique(distRule$alts[[count]])), sort(unique(names(params)))))
-                    matchedAlt <- count
+              count <- count + 1
+              if(identical(sort(unique(distRule$alts[[count]])), sort(unique(names(params)))))
+                matchedAlt <- count
             }
-            if(is.null(matchedAlt)) stop('Error: no available re-parameterization found for: ', deparse(valueExpr), '.')
-        }
-        nonReqdArgs <- names(params)[!(names(params) %in% distRule$reqdArgs)]
-        for(iArg in 1:numArgs) {   ## loop over the required arguments
+            if(is.null(matchedAlt)) stop(paste0('bad parameters for distribution ', deparse(valueExpr), '. (No available re-parameterization found.)'), call. = FALSE)
+          }
+          nonReqdArgs <- names(params)[!(names(params) %in% distRule$reqdArgs)]
+          for(iArg in 1:numArgs) {   ## loop over the required arguments
             reqdArgName <- distRule$reqdArgs[iArg]
             ## if it was supplied, copy the supplied expression "as is"
             if(reqdArgName %in% names(params)) {
-                newValueExpr[[iArg + 1]] <- params[[reqdArgName]];
-                next
+              newValueExpr[[iArg + 1]] <- params[[reqdArgName]];
+              next
             }
             if(!matchedAlt) error("Something wrong - looking for alternative parameterization but supplied args are same as required args: ", deparse(valueExpr))
             if(!reqdArgName %in% names(distRule$exprs[[matchedAlt]]))
-                stop('Error: could not find ', reqdArgName, ' in alternative parameterization number ', matchedAlt, ' for: ', deparse(valueExpr), '.')
+              stop('Error: could not find ', reqdArgName, ' in alternative parameterization number ', matchedAlt, ' for: ', deparse(valueExpr), '.')
             transformedParameterPT <- distRule$exprs[[matchedAlt]][[reqdArgName]]
             ## fixing issue of pathological-case model variable names, e.g.,
             ## y ~ dnorm(0, tau = sd)
@@ -604,46 +624,47 @@ modelDefClass$methods(reparameterizeDists = function() {
             ##for(nm in c(nonReqdArgs, distRule$reqdArgs))
             namesToSubstitute <- intersect(c(nonReqdArgs, distRule$reqdArgs), all.vars(transformedParameterPT))
             for(nm in namesToSubstitute) {
-                ## loop thru possible non-canonical parameters in the expression for the canonical parameter
-                if(is.null(params[[nm]])) stop('this shouldn\'t happen -- something wrong with my understanding of parameter transformations')
-                transformedParameterPT <- parseTreeSubstitute(pt = transformedParameterPT, pattern = as.name(nm), replacement = params[[nm]])
+              ## loop thru possible non-canonical parameters in the expression for the canonical parameter
+              if(is.null(params[[nm]])) stop('this shouldn\'t happen -- something wrong with my understanding of parameter transformations')
+              transformedParameterPT <- parseTreeSubstitute(pt = transformedParameterPT, pattern = as.name(nm), replacement = params[[nm]])
             }
             newValueExpr[[iArg + 1]] <- transformedParameterPT
-        }
-
-        # evaluate boundExprs in context of model
-        boundExprs <- BUGSdecl$boundExprs
-        reqdParams <- as.list(newValueExpr[-1])
-        for(iBound in 1:2) {
+          }
+          
+                                        # evaluate boundExprs in context of model
+          boundExprs <- BUGSdecl$boundExprs
+          reqdParams <- as.list(newValueExpr[-1])
+          for(iBound in 1:2) {
             if(!is.numeric(boundExprs[[iBound]])) {
                                         # only expecting boundExprs to be functions of reqdArgs
-                if(length(intersect(nonReqdArgs, all.vars(boundExprs[[iBound]]))))
-                    stop("Expecting expressions for distribution range for ", distName, " to be functions only of required arguments, namely the parameters used in the 'Rdist' element.")
-                namesToSubstitute <- intersect(c(distRule$reqdArgs), all.vars(boundExprs[[iBound]]))
-                for(nm in namesToSubstitute) {
-                    if(is.null(params[[nm]])) stop('this shouldn\'t happen -- something wrong with my understanding of parameter transformations')
-                    boundExprs[[iBound]] <- parseTreeSubstitute(pt = boundExprs[[iBound]], pattern = as.name(nm), replacement = params[[nm]])
-                }
+              if(length(intersect(nonReqdArgs, all.vars(boundExprs[[iBound]]))))
+                stop("Expecting expressions for distribution range for ", distName, " to be functions only of required arguments, namely the parameters used in the 'Rdist' element.")
+              namesToSubstitute <- intersect(c(distRule$reqdArgs), all.vars(boundExprs[[iBound]]))
+              for(nm in namesToSubstitute) {
+                if(is.null(params[[nm]])) stop('this shouldn\'t happen -- something wrong with my understanding of parameter transformations')
+                boundExprs[[iBound]] <- parseTreeSubstitute(pt = boundExprs[[iBound]], pattern = as.name(nm), replacement = params[[nm]])
+              }
             }
+          }
+          
+          ## hold onto the expressions for non-required args
+          nonReqdArgExprs <- params[nonReqdArgs]    ## grab the non-required args from the original params list
+          names(nonReqdArgExprs) <- if(length(nonReqdArgExprs) > 0) paste0('.', names(nonReqdArgExprs)) else character(0)  ## append '.' to the front of all the old (reparameterized away) param names
+          
+                                        # insert altParams and bounds into code
         }
-        
-        ## hold onto the expressions for non-required args
-        nonReqdArgExprs <- params[nonReqdArgs]    ## grab the non-required args from the original params list
-        names(nonReqdArgExprs) <- if(length(nonReqdArgExprs) > 0) paste0('.', names(nonReqdArgExprs)) else character(0)  ## append '.' to the front of all the old (reparameterized away) param names
-
-        # insert altParams and bounds into code
         newValueExpr <- as.call(c(as.list(newValueExpr), nonReqdArgExprs, boundExprs))
         newCode <- BUGSdecl$code
         newCode[[3]] <- newValueExpr
         
         BUGSdeclClassObject <- BUGSdeclClass$new()
-        # note at this point boundExprs set back to NULL as all info in lower,upper in valueExpr
+                                        # note at this point boundExprs set back to NULL as all info in lower,upper in valueExpr
         BUGSdeclClassObject$setup(newCode, BUGSdecl$contextID, BUGSdecl$sourceLineNumber, BUGSdecl$truncated, NULL)
         declInfo[[i]] <<- BUGSdeclClassObject
-    }  # close loop over declInfo
-})
-
-    modelDefClass$methods(addRemainingDotParams = function() {
+      }  # close loop over declInfo
+  })
+    
+modelDefClass$methods(addRemainingDotParams = function() {
     for(iDecl in seq_along(declInfo)) {
         BUGSdecl <- declInfo[[iDecl]]     ## grab this current BUGS declation info object
         if(BUGSdecl$type == 'determ')  next  ## skip deterministic nodes
@@ -1464,7 +1485,6 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     vars_2_vertexOrigID <- new.env()   ## IDs for node labels, e.g. x[1:4] might be: 1, 1, 1, 2
     vars2LogProbName <- new.env()      ## e.g. "x" might be "logProb_x" if it has any LHS
     ##vars2LogProbID <- new.env()        ## yiels LogProbIDs, which are not sorted in any way and we might move away from.
-
     ## 1b. set up variables in all the environments
     for(iV in seq_along(varInfo)) {
         varName <- varInfo[[iV]]$varName
@@ -1514,7 +1534,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
             types <- c(types, rep(BUGSdecl$type, length(BUGSdecl$nodeFunctionNames) ) )       ## append vector of "stoch" or "determ" to types vector
             BUGSdecl$origIDs <- next_origID -1 + (1:length(BUGSdecl$nodeFunctionNames))       ## record the original IDs used here
             next_origID <- next_origID + length(BUGSdecl$nodeFunctionNames)
-
+            
             ## Fill in the vars_2_nodeOrigID elements
             if(is.environment(BUGSdecl$replacementsEnv)) { ## this means there was some replacement involved in this BUGS line
                 BUGSdecl$replacementsEnv[['origIDs']] <- BUGSdecl$origIDs
@@ -1631,6 +1651,8 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
         for(iV in seq_along(rhsVars)) {  ## Iterate over the RHS variables in a BUGS line
             rhsVar <- rhsVars[iV]
             nDim <- varInfo[[rhsVar]]$nDim
+            if(nDim != length(BUGSdecl$parentIndexNamePieces[[iV]]))  # this check should be redundant with equivalent check in genVarInfo3
+               stop("Dimension of ", rhsVar, " is ", nDim, ", which does not match its usage in '", deparse(BUGSdecl$code), "'.")
             if(nDim > 0) { ## Make the split.  This function is complicated.
                 splitAns <- splitVertices(vars_2_vertexOrigID[[rhsVar]], BUGSdecl$unrolledIndicesMatrix,
                                           contexts[[BUGSdecl$contextID]]$indexVarExprs, contexts[[BUGSdecl$contextID]]$indexVarNames,
@@ -2007,7 +2029,7 @@ modelDefClass$methods(genVarInfo3 = function() {
 
         ## RHS:
         rhsVars <- BUGSdecl$rhsVars
-        
+
         for(iV in seq_along(rhsVars)) {
             rhsVar <- rhsVars[iV]
             if(!(rhsVar %in% names(varInfo))) {
@@ -2018,6 +2040,8 @@ modelDefClass$methods(genVarInfo3 = function() {
                                                        nDim = nDim,
                                                        anyStoch = FALSE)
             }
+            if(varInfo[[rhsVar]]$nDim != length(BUGSdecl$parentIndexNamePieces[[iV]]))
+                stop("Dimension of ", rhsVar, " is ", varInfo[[rhsVar]]$nDim, ", which does not match its usage in '", deparse(BUGSdecl$code), "'.")
             if(varInfo[[rhsVar]]$nDim > 0) {
                 for(iDim in 1:varInfo[[rhsVar]]$nDim) {
                     indexNamePieces <- BUGSdecl$parentIndexNamePieces[[iV]][[iDim]]

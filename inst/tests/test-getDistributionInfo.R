@@ -1,3 +1,5 @@
+source(system.file(file.path('tests', 'test_utils.R'), package = 'nimble'))
+
 ## Testing functions that query distribution info based on distribution name or node/variable names
 
 context('Testing distributions API')
@@ -115,7 +117,7 @@ code <- nimbleCode({
 })
 
 m <- nimbleModel(code, data = list(y = rnorm(10)),
-                 constants = list(zeroes = rep(0,2), prec = diag(rep(1,2))))
+                 constants = list(zeroes = rep(0,2), prec = diag(rep(1,2))), calculate=FALSE)
 
 code2 <- nimbleCode({
     for(i in 1:10)
@@ -131,7 +133,7 @@ code2 <- nimbleCode({
 })
 
 m2 <- nimbleModel(code2, data = list(y = rnorm(10)),
-                 constants = list(zeroes = rep(0,2), prec = diag(rep(1,2))))
+                 constants = list(zeroes = rep(0,2), prec = diag(rep(1,2))), calculate=FALSE)
 
 out <- c(rep(TRUE, 10), FALSE, TRUE)
 names(out) <- m$expandNodeNames(c('y', 'mu', 'w'))
@@ -139,10 +141,6 @@ names(out) <- m$expandNodeNames(c('y', 'mu', 'w'))
 try(test_that("Test of isEndNode",
               expect_identical(m$isEndNode(c('y', 'mu', 'w')), out,
                                info = "incorrect results from isEndNode")))
-
-try(test_that("Test of isEndNode, unknown node",
-              expect_error(m$isEndNode(c('zzz', 'mu', 'w')), out,
-                               info = "unknown node not detected in isEndNode")))
 
 vars <- c('y', 'mu', 'w', 'x')
 out <- c(rep('dnorm', 11), NA, 'dmnorm')
@@ -175,7 +173,6 @@ names(out) <- m$expandNodeNames(vars)
 try(test_that("Test of isBinary model method",
               expect_identical(m2$isBinary(vars), out,
                                info = "incorrect results from isBinary")))
-
 
 vars <- c('y', 'yy', 'w', 'x', 'uu', 'z')
 out <- !c(rep(FALSE, 10), FALSE, TRUE, FALSE, FALSE, TRUE)
@@ -230,10 +227,6 @@ names(out) <- c('cov','mean')
 try(test_that("Test of getDimension, specific params",
               expect_identical(m$getDimension('x', params = c('cov','mean')), out,
                                info = "incorrect result from getDimension for specific params, vector")))
-
-try(test_that("Test of getDimension, value only",
-              expect_error(m$getDimension('foo', includeParams = TRUE),
-                               info = "not detecting missing node in getDimension")))
 
 try(test_that("Test of getDimension, value only",
               expect_error(m$getDimension('x', params = 'foo'),
@@ -299,10 +292,13 @@ try(test_that("Test of use of ddirchmulti in R model",
               expect_silent(m$simulate('y'))))
 try(test_that("Test of use of ddirchmulti in R model",
               expect_equal(m$y[5,4], 149, info = "unexpected result from use of ddirchmulti")))
+
 set.seed(0)
 cm <- compileNimble(m)
+
 try(test_that("Test of use of ddirchmulti in R model",
               expect_silent(cm$simulate('y'))))
 try(test_that("Test of use of user-defined ddirchmulti",
               expect_identical(m$y, cm$y, info = "R and compiled model values from ddirchmulti not the same")))
+
 

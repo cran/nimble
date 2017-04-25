@@ -13,7 +13,15 @@ cppOutputCalls <- c(makeCallList(binaryMidOperators, 'cppOutputMidOperator'),
                     makeCallList(eigOtherMemberFunctionCalls, 'cppOutputEigMemberFunctionNoTranslate'),
                     makeCallList(eigProxyCallsExternalUnary, 'cppOutputEigExternalUnaryFunction'),
                     makeCallList(c('startNimbleTimer','endNimbleTimer'), 'cppOutputMemberFunction'),
-                    list(size = 'cppOutputSize',
+                    makeCallList(c('nimSeqBy','nimSeqLen', 'nimSeqByLen'), 'cppOutputCallAsIs'),
+                    makeCallList(nimbleListReturningOperators, 'cppNimbleListReturningOperator'),
+                    list(
+                        eigenCast = 'cppOutputEigenCast',
+                        fill = 'cppOutputEigMemberFunctionNoTranslate',
+                        MAKE_FIXED_VECTOR = 'cppOutputMakeFixedVector',
+                        concatenateTemp = 'cppOutputEigBlank',
+                        ':' = 'cppOutputColon',
+                        size = 'cppOutputSize',
                          'for' = 'cppOutputFor',
                          'if' = 'cppOutputIfWhile',
                          'while' = 'cppOutputIfWhile',
@@ -26,6 +34,7 @@ cppOutputCalls <- c(makeCallList(binaryMidOperators, 'cppOutputMidOperator'),
                          resize = 'cppOutputMemberFunctionDeref',
                          nfMethod = 'cppOutputNFmethod',
                          nfVar = 'cppOutputNFvar',
+                         makeNewNimbleListObject = "cppNewNimbleList",
                          getsize = 'cppOutputMemberFunctionDeref',
                          getNodeFunctionIndexedInfo = 'cppOutputGetNodeFunctionIndexedInfo',
                          resizeNoPtr = 'cppOutputMemberFunction',
@@ -38,7 +47,9 @@ cppOutputCalls <- c(makeCallList(binaryMidOperators, 'cppOutputMidOperator'),
                          return = 'cppOutputReturn',
                          cppPtrType = 'cppOutputPtrType', ## mytype* (needed in templates like myfun<a*>(b)
                          cppDereference = 'cppOutputDereference', ## *(arg)
+                         cppPointerDereference = 'cppOutputPointerDereference',  ##(*arg)
                          cppMemberDereference = 'cppOutputMidOperator', ## arg1->arg2
+                         cppLiteral = 'cppOutputLiteral',
                          '[[' = 'cppOutputDoubleBracket',
                          as.integer = 'cppOutputCast',
                          as.numeric = 'cppOutputCast',
@@ -59,7 +70,7 @@ cppMidOperators[['|']] <- ' || '
 for(v in c('$', ':')) cppMidOperators[[v]] <- NULL
 for(v in assignmentOperators) cppMidOperators[[v]] <- ' = '
 
-nimCppKeywordsThatFillSemicolon <- c('{','for',ifOrWhile,'nimSwitch')
+nimCppKeywordsThatFillSemicolon <- c('{','for',ifOrWhile,'nimSwitch','cppLiteral')
 
 ## In the following list, the names are names in the parse tree (i.e. the name field in an exprClass object)
 ## and the elements are the name of the function to use to generate output for that name
@@ -105,6 +116,19 @@ exprName2Cpp <- function(code, symTab, asArg = FALSE) {
     }
 }
 
+cppOutputEigenCast <- function(code, symTab) {
+    paste0( '(',nimGenerateCpp(code$args[[1]], symTab), ').cast<', code$args[[2]], '>()')
+}
+
+cppOutputMakeFixedVector <- function(code, symTab) {
+    type <- code$args[[5]]
+    fixedName <- code$args[[2]]
+    vecName <- code$args[[1]]
+    len <- code$args[[3]]
+    fixedValues <- paste0(unlist(lapply(code$args[[4]]$args, nimGenerateCpp, symTab) ), collapse = ',')
+    paste0(type, ' ', fixedName,'[] = {', fixedValues, '}; std::vector<', type, '> ', vecName,'(', fixedName, ',', fixedName, ' + ', len, ')')
+}
+
 cppOutputVoidPtr <- function(code, symTab) {
     paste('static_cast<void *>(&',code$args[[1]]$name,')')
 }
@@ -143,6 +167,21 @@ cppOutputChainedCall <- function(code, symTab) {
     firstCall <- nimGenerateCpp(code$args[[1]], symTab)
     ## now similar to cppOutputCallAsIs
     paste0(firstCall, '(', paste0(unlist(lapply(code$args[-1], nimGenerateCpp, symTab, asArg = TRUE) ), collapse = ', '), ')' )
+}
+
+cppNewNimbleList <- function(code, symTab) {
+    ## This won't work for something like A$B <- nl$new()
+    ## because the first arg of the caller is A$B, not a simple name
+    ## But the generator info is embedded in sizeExprs
+      ##listType <- symTab$getSymbolObject(code$caller$args[[1]]$name)$templateArgs
+  ##if(is.null(listType)) listType <-  symTab$getSymbolObject(code$caller$args[[1]]$name, inherits = TRUE)$templateArgs
+    listType <- code$sizeExprs$nlProc$cppDef$name
+    paste0("new ", listType)
+}
+
+cppNimbleListReturningOperator <- function(code, symTab) {
+  code$name <- nimbleListReturningFunctionList[[code$name]]$cppName
+  cppOutputCallAsIs(code, symTab)
 }
 
 cppOutputFor <- function(code, symTab) {
@@ -242,7 +281,9 @@ cppOutputEigenMapAssign <- function(code, symTab) {
     MapType <- if(!useStrides) {
         paste0('Map< ', code$args[[3]]$name,' >')
     } else {
-        if(bothStridesDyn) 'EigenMapStr'
+        if(bothStridesDyn) {
+            symTab$getSymbolObject(nimDeparse(code$args[[1]]))$baseType
+        } ##'EigenMapStr'
         else paste0('Map< ', code$args[[3]]$name, ', Unaligned, ', strideTemplateDec,' >')
     }
     paste0('new (&', nimGenerateCpp(code$args[[1]], symTab),') ', MapType, '(', paste(c(nimGenerateCpp(code$args[[2]], symTab), nimGenerateCpp(code$args[[4]], symTab), nimGenerateCpp(code$args[[5]], symTab), strideConstructor), collapse = ','), ')')
@@ -263,7 +304,7 @@ cppOutputMemberFunctionGeneric <- function(code, symTab) { ##cppMemberFunction(m
 
 cppOutputEigExternalUnaryFunction <- function(code, symTab) {
     info <-  eigProxyTranslateExternalUnary[[code$name]]
-    if(length(info) != 3) stop(paste0("Invalid information entry for outputting eigen version of ", code$name), call. = FALSE)
+    if(length(info) < 3) stop(paste0("Invalid information entry for outputting eigen version of ", code$name), call. = FALSE)
     paste0( '(', nimGenerateCpp(code$args[[1]], symTab), ').unaryExpr(std::ptr_fun<',info[2],', ',info[3],'>(', info[1], '))')
 }
 
@@ -293,6 +334,11 @@ cppOutputNFmethod <- function(code, symTab) {
     if(length(code$args) < 2) stop('Error: expecting at least 2 arguments for operator ',code$name)
     paste0( nimGenerateCpp(code$args[[1]], symTab), '.', code$args[[2]]) ##, ## No nimGenerateCpp on code$args[[2]] because it should be a string
     ## This used to take method args in this argList.  But now they are in a chainedCall
+}
+
+cppOutputColon <- function(code, symTab) {
+    if(length(code$args) != 2) stop('Error: expecting 2 arguments for operator ',code$name)
+    paste0( 'nimSeqByD(', paste(nimGenerateCpp(code$args[[1]], symTab), nimGenerateCpp(code$args[[2]], symTab), 1, 0, sep = ','),')');
 }
 
 cppOutputMidOperator <- function(code, symTab) {
@@ -382,6 +428,14 @@ cppOutputPtrType <- function(code, symTab) {
 
 cppOutputDereference <- function(code, symTab) {
     cppOutputCallWithName(code, symTab, '*')
+}
+
+cppOutputPointerDereference <- function(code, symTab) {
+  paste0('(*', paste0(unlist(lapply(code$args, nimGenerateCpp, symTab, asArg = TRUE) ), collapse = ', '), ')' )
+}
+
+cppOutputLiteral <- function(code, symTab) {
+  return(eval(code$args[[1]]))
 }
 
 cppOutputTemplate <- function(code, symTab) {

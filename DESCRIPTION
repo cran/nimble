@@ -4,7 +4,8 @@ Title: Flexible BUGS-Compatible System for Hierarchical Statistical
 Description: Flexible application of algorithms to models specified in the BUGS
     language. Algorithms can be written in the NIMBLE language and made available to
     any model.
-Version: 0.6-3
+Version: 0.6-4
+Date: 2017-04-22
 Maintainer: Christopher Paciorek <paciorek@stat.berkeley.edu>
 Author: Perry de Valpine, Christopher Paciorek, Daniel Turek, Cliff Anderson-
     Bergman, Duncan Temple Lang
@@ -37,14 +38,14 @@ Collate: config.R all_utils.R options.R distributions_inputList.R
         nimbleFunction_util.R nimbleFunction_core.R
         nimbleFunction_nodeFunction.R nimbleFunction_nodeFunctionNew.R
         nimbleFunction_Rexecution.R nimbleFunction_compile.R
-        nimbleFunction_keywordProcessing.R types_util.R
-        types_symbolTable.R types_modelValues.R
+        nimbleFunction_keywordProcessing.R nimbleList_core.R
+        types_util.R types_symbolTable.R types_modelValues.R
         types_modelValuesAccessor.R types_modelVariableAccessor.R
         types_nimbleFunctionList.R types_nodeFxnVector.R
         types_numericLists.R cppDefs_utils.R cppDefs_variables.R
         cppDefs_core.R cppDefs_namedObjects.R cppDefs_BUGSmodel.R
         cppDefs_RCfunction.R cppDefs_nimbleFunction.R
-        cppDefs_modelValues.R cppDefs_cppProject.R
+        cppDefs_nimbleList.R cppDefs_modelValues.R cppDefs_cppProject.R
         cppDefs_outputCppFromRparseTree.R cppInterfaces_utils.R
         cppInterfaces_models.R cppInterfaces_modelValues.R
         cppInterfaces_nimbleFunctions.R cppInterfaces_otherTypes.R
@@ -58,6 +59,6 @@ Collate: config.R all_utils.R options.R distributions_inputList.R
         zzz.R
 RoxygenNote: 5.0.1
 NeedsCompilation: yes
-Packaged: 2016-12-14 21:33:29 UTC; paciorek
+Packaged: 2017-04-25 12:21:40 UTC; paciorek
 Repository: CRAN
-Date/Publication: 2016-12-14 23:15:44
+Date/Publication: 2017-04-25 14:33:04 UTC

@@ -28,7 +28,7 @@
 
 using std::vector;
 
-enum nimType {INT = 1, DOUBLE = 2, UNDEFINED = -1};
+enum nimType {INT = 1, DOUBLE = 2, BOOL = 3, UNDEFINED = -1};
 
  class NimArrType{
 	public:
@@ -57,6 +57,7 @@ class NimArrBase: public NimArrType {
   T *v;
   //vector<T> *vPtr;
   T **vPtr;
+  std::size_t element_size() {return(sizeof(T));}
   void setVptr() {vPtr = &v;}
   //  vector<T> *getVptr() const {return(vPtr);}
   T **getVptr() const{return(vPtr);}
@@ -79,11 +80,11 @@ class NimArrBase: public NimArrType {
   int size() const {return(NAlength);}
   virtual int numDims() const = 0;
   virtual int dimSize(int i) const = 0;
-  T &operator[](int i) const {return((*vPtr)[offset + i * stride1]);} // could be misused for nDim > 1
-  //  T &operator[](int i) {return((*vPtr)[offset + i * stride1]);} // could be misused for nDim > 1
+  T &operator[](int i) const {return((*vPtr)[offset + i * stride1]);} // generic for nDim > 1, overloaded for other dimensions
+  T &valueNoMap(int i) const {return(*(v + i));} // only to be used if not a map 
   virtual int calculateIndex(vector<int> &i) const =0;
   T *getPtr() {return(&((*vPtr)[0]));}
-  virtual void setSize(vector<int> sizeVec)=0;
+  virtual void setSize(vector<int> sizeVec, bool copyValues = true, bool fillZeros = true)=0;
   void setLength(int l, bool copyValues = true, bool fillZeros = true) {
     if(NAlength==l) {
       if((!copyValues) & fillZeros) fillAllValues(static_cast<T>(0));
@@ -99,6 +100,9 @@ class NimArrBase: public NimArrType {
 	    std::fill(new_v + NAlength, new_v + l, static_cast<T>(0));
 	  }
 	}
+      } else {
+	if(fillZeros)
+	  std::fill(new_v, new_v + l, static_cast<T>(0));
       }
       delete[] v;
     }
@@ -108,12 +112,25 @@ class NimArrBase: public NimArrType {
     own_v = true;
   } // Warning, this does not make sense if vPtr is pointing to someone else's vMemory.
   void fillAllValues(T value) { std::fill(v, v + NAlength, value); }
+  void fillAllValues(T value, bool fillZeros, bool recycle) {
+    if(recycle) {
+      std::fill(v, v + NAlength, value);
+    } else {
+      if(NAlength > 0) v[0] = value;
+      if(NAlength > 1)
+	if(fillZeros)
+	  std::fill(v + 1, v + NAlength, static_cast<T>(0));
+    }
+  }
   void setMyType() {
     myType = UNDEFINED;
     if(typeid(T) == typeid(int) )
       myType = INT;
     if(typeid(T) == typeid(double) )
       myType = DOUBLE;
+    if(typeid(T) == typeid(bool) )
+      myType = BOOL;
+
   }
   virtual ~NimArrBase(){
     //delete[] NAdims;
@@ -160,6 +177,9 @@ class VecNimArrBase : public NimVecType {
       myType = INT;
     if(typeid(T) == typeid(double) )
       myType = DOUBLE;
+    if(typeid(T) == typeid(bool) )
+      myType = BOOL;
+
   }
 
   ~VecNimArrBase(){};

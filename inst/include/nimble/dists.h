@@ -38,6 +38,10 @@ extern "C" {
   SEXP C_rexp_nimble(SEXP, SEXP);
   SEXP C_pexp_nimble(SEXP, SEXP, SEXP, SEXP);
   SEXP C_qexp_nimble(SEXP, SEXP, SEXP, SEXP);
+  SEXP C_dinvgamma(SEXP, SEXP, SEXP, SEXP);
+  SEXP C_rinvgamma(SEXP, SEXP, SEXP);
+  SEXP C_pinvgamma(SEXP, SEXP, SEXP, SEXP, SEXP);
+  SEXP C_qinvgamma(SEXP, SEXP, SEXP, SEXP, SEXP);
 
 }
 
@@ -51,12 +55,12 @@ void rmulti(int*, double, double*, int);
 double ddirch(double*, double*, int, int);
 void rdirch(double*, double*, int);
 
-double dmnorm_chol(double*, double*, double*, int, double, int);
+double dmnorm_chol(double*, double*, double*, int, double, int, int);
 void rmnorm_chol(double *, double*, double*, int, double);
-double dmvt_chol(double*, double*, double*, double, int, double, int);
+double dmvt_chol(double*, double*, double*, double, int, double, int, int);
 void rmvt_chol(double *, double*, double*, double, int, double);
-double dwish_chol(double*, double*, double, int, double, int);
-void rwish_chol(double*, double*, double, int, double);
+double dwish_chol(double*, double*, double, int, double, int, int);
+void rwish_chol(double*, double*, double, int, double, int);
 
 double dinterval(double, double, double*, int, int);
 double rinterval(double, double*, int);
@@ -83,5 +87,10 @@ double rexp_nimble(double);
 double dexp_nimble(double, double, int);
 double pexp_nimble(double, double, int, int);
 double qexp_nimble(double, double, int, int);
+
+double rinvgamma(double, double);
+double dinvgamma(double, double, double, int);
+double pinvgamma(double, double, double, int, int);
+double qinvgamma(double, double, double, int, int);
 
 #endif

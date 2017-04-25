@@ -44,7 +44,7 @@ RCvirtualFunProcessing <- setRefClass('RCvirtualFunProcessing',
                                           showCpp = function() {
                                               writeCode(nimGenerateCpp(compileInfo$nimExpr, compileInfo$newLocalSymTab))
                                           },
-                                          setupSymbolTables = function(parentST = NULL) {
+                                          setupSymbolTables = function(parentST = NULL, neededTypes = NULL) {
                                               argInfoWithMangledNames <- RCfun$argInfo
                                               numArgs <- length(argInfoWithMangledNames)
                                               if(numArgs > 0) {
@@ -59,13 +59,13 @@ RCvirtualFunProcessing <- setRefClass('RCvirtualFunProcessing',
                                               if(numArgs>0) names(argInfoWithMangledNames) <- paste0("ARG", 1:numArgs, "_", Rname2CppName(names(argInfoWithMangledNames)),"_")
                                               nameSubList <<- lapply(names(argInfoWithMangledNames), as.name)
                                               names(nameSubList) <<- names(RCfun$argInfo)
-                                              compileInfo$origLocalSymTab <<- argTypeList2symbolTable(argInfoWithMangledNames) ## will be used for function args.  must be a better way.
-                                              compileInfo$newLocalSymTab <<- argTypeList2symbolTable(argInfoWithMangledNames)
+                                              compileInfo$origLocalSymTab <<- argTypeList2symbolTable(argInfoWithMangledNames, neededTypes, names(RCfun$argInfo)) ## will be used for function args.  must be a better way.
+                                              compileInfo$newLocalSymTab <<- argTypeList2symbolTable(argInfoWithMangledNames, neededTypes, names(RCfun$argInfo))
                                               if(!is.null(parentST)) {
                                                   compileInfo$origLocalSymTab$setParentST(parentST)
                                                   compileInfo$newLocalSymTab$setParentST(parentST)
                                               }
-                                              compileInfo$returnSymbol <<- argType2symbol(RCfun$returnType, "return")
+                                              compileInfo$returnSymbol <<- argType2symbol(RCfun$returnType, neededTypes, "return", "returnType")
                                           },
                                           process = function(...) {
                                               if(inherits(compileInfo$origLocalSymTab, 'uninitializedField')) {
@@ -121,6 +121,7 @@ nf_substituteExceptFunctionsAndDollarSigns <- function(code, subList) {
     }
     if(is.list(code)) { ## Keyword processing stage of compilation may have stuck lists into the argument list of a call (for maps)
         code <- lapply(code, nf_substituteExceptFunctionsAndDollarSigns, subList)
+        return(code)
     }
     stop(paste("Error doing replacement for code ", deparse(code)))
 }
@@ -132,7 +133,6 @@ RCfunProcessing <- setRefClass('RCfunProcessing',
                                    ),
                                methods = list(
                                    process = function(debug = FALSE, debugCpp = FALSE, debugCppLabel = character(), doKeywords = TRUE) {
-                                       
                                        if(!is.null(nimbleOptions()$debugRCfunProcessing)) {
                                            if(nimbleOptions()$debugRCfunProcessing) {
                                                debug <- TRUE
@@ -193,7 +193,6 @@ RCfunProcessing <- setRefClass('RCfunProcessing',
                                            writeLines('***** READY FOR initSizes *****')
                                            browser()
                                        }
-                                       
                                        compileInfo$typeEnv <<- exprClasses_initSizes(compileInfo$nimExpr, compileInfo$newLocalSymTab, returnSymbol = compileInfo$returnSymbol)
                                        if(debug) {
                                            print('ls(compileInfo$typeEnv)')
@@ -206,11 +205,10 @@ RCfunProcessing <- setRefClass('RCfunProcessing',
 
                                        compileInfo$typeEnv[['neededRCfuns']] <<- list()
                                        compileInfo$typeEnv[['.AllowUnknowns']] <<- TRUE ## will be FALSE for RHS recursion in setSizes
-
+                                       compileInfo$typeEnv[['.ensureNimbleBlocks']] <<- FALSE ## will be TRUE for LHS recursion after RHS sees rmnorm and other vector dist "r" calls.
                                        passedArgNames <- as.list(compileInfo$origLocalSymTab$getSymbolNames()) 
                                        names(passedArgNames) <- compileInfo$origLocalSymTab$getSymbolNames() 
                                        compileInfo$typeEnv[['passedArgumentNames']] <<- passedArgNames ## only the names are used.  
-  
                                        tryResult <- try(exprClasses_setSizes(compileInfo$nimExpr, compileInfo$newLocalSymTab, compileInfo$typeEnv))
                                        if(inherits(tryResult, 'try-error')) {
                                            stop(paste('There is some problem at the setSizes processing step for this code:\n', paste(deparse(compileInfo$origRcode), collapse = '\n'), collapse = '\n'), call. = FALSE)
@@ -223,7 +221,7 @@ RCfunProcessing <- setRefClass('RCfunProcessing',
                                            writeLines('***** READY FOR insertAssertions *****')
                                            browser()
                                        }
-                                       
+
                                        tryResult <- try(exprClasses_insertAssertions(compileInfo$nimExpr))
                                        if(inherits(tryResult, 'try-error')) {
                                            stop(paste('There is some problem at the insertAdditions processing step for this code:\n', paste(deparse(compileInfo$origRcode), collapse = '\n'), collapse = '\n'), call. = FALSE)

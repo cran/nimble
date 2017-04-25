@@ -18,6 +18,127 @@ system.in.dir <- function(cmd, dir = '.') {
         system(cmd)
 }
 
+gen_runFunCore <- function(input) {
+    runFun <- function() {}
+    formalsList <- input$args
+    if(is.null(formalsList)) formalsList <- list()
+    if(is.null(names(formalsList)))
+        if(length(formalsList) > 0)
+            names(formalsList) <- paste0('arg', seq_along(input$args))
+    formals(runFun) <- formalsList
+    tmp <- quote({})
+    tmp[[2]] <- input$expr
+    tmp[[3]] <- quote(return(out))
+    tmp[[4]] <- substitute(returnType(OUT), list(OUT = input$outputType))
+    body(runFun) <- tmp
+    return(runFun)
+}
+
+## Indexes the names of a list of input lists for test_coreRfeature
+indexNames <- function(x) {
+    i <- 1
+    lapply(x, function(z) {z$name <- paste(i, z$name); i <<- i + 1; z})
+}
+
+test_coreRfeature <- function(input, verbose = TRUE, dirName = NULL) { ## a lot like test_math but a bit more flexible
+  if(verbose) cat("### Testing", input$name, "###\n")
+  runFun <- gen_runFunCore(input)
+  nfR <- nimbleFunction(run = runFun)
+  nfC <- try(compileNimble(nfR, dirName = dirName))
+  compilerFailed <- inherits(nfC, 'try-error')
+  expectCompilerFailed <- FALSE
+  if(!is.null(input[['safeCompilerFail']]))
+      if(isTRUE(input[['safeCompilerFail']]))
+          expectCompilerFailed <- TRUE
+
+  test_that(paste0("Compiler worked or failed as expected: ", input$name),
+            expect_equal(compilerFailed, expectCompilerFailed))
+
+  if(compilerFailed) {
+      if(expectCompilerFailed) message('COMPILER FAILURE WAS EXPECTED.  THE TEST PASSED.')
+      return();
+  }
+  
+  nArgs <- length(input$args)
+  evalEnv <- new.env()
+  eval(input$setArgVals, envir = evalEnv)
+  savedArgs <- as.list(evalEnv)
+  seedToUse <- if(is.null(input[['seed']])) 31415927 else input[['seed']]
+  set.seed(seedToUse)
+  eval(input$expr, envir = evalEnv)
+  savedOutputs <- as.list(evalEnv)
+  list2env(savedArgs, envir = evalEnv)
+  if(nArgs == 5) {
+      set.seed(seedToUse)
+      out_nfR = nfR(evalEnv$arg1, evalEnv$arg2, evalEnv$arg3, evalEnv$arg4, evalEnv$arg5)
+      list2env(savedArgs, envir = evalEnv)
+      set.seed(seedToUse)
+      out_nfC = nfC(evalEnv$arg1, evalEnv$arg2, evalEnv$arg3, evalEnv$arg4, evalEnv$arg5)
+  }  
+  if(nArgs == 4) {
+      set.seed(seedToUse)
+      out_nfR = nfR(evalEnv$arg1, evalEnv$arg2, evalEnv$arg3, evalEnv$arg4)
+      list2env(savedArgs, envir = evalEnv)
+      set.seed(seedToUse)
+      out_nfC = nfC(evalEnv$arg1, evalEnv$arg2, evalEnv$arg3, evalEnv$arg4)
+  }  
+
+  if(nArgs == 3) {
+      set.seed(seedToUse)
+      out_nfR = nfR(evalEnv$arg1, evalEnv$arg2, evalEnv$arg3)
+      list2env(savedArgs, envir = evalEnv)
+      set.seed(seedToUse)
+      out_nfC = nfC(evalEnv$arg1, evalEnv$arg2, evalEnv$arg3)
+  }  
+  if(nArgs == 2) {
+      set.seed(seedToUse)
+      out_nfR = nfR(evalEnv$arg1, evalEnv$arg2)
+      list2env(savedArgs, envir = evalEnv)
+      set.seed(seedToUse)
+      out_nfC = nfC(evalEnv$arg1, evalEnv$arg2)
+  }
+  if(nArgs == 1) {
+      set.seed(seedToUse)
+      out_nfR = nfR(evalEnv$arg1)
+      list2env(savedArgs, envir = evalEnv)
+      set.seed(seedToUse)
+      out_nfC = nfC(evalEnv$arg1)
+  }
+  if(nArgs == 0) {
+      set.seed(seedToUse)
+      out_nfR = nfR()
+      list2env(savedArgs, envir = evalEnv)
+      set.seed(seedToUse)
+      out_nfC = nfC()
+  }
+  out <- savedOutputs$out
+  ## clearn any attributes except dim
+  dimOut <- attr(out, 'dim')
+  dimOutR <- attr(out_nfR, 'dim')
+  dimOutC <- attr(out_nfC, 'dim')
+  attributes(out) <- attributes(out_nfR) <- attributes(out_nfC) <- NULL
+  attr(out, 'dim') <- dimOut
+  attr(out_nfR, 'dim') <- dimOutR
+  attr(out_nfC, 'dim') <- dimOutC
+  checkEqual <- input[['checkEqual']]
+  if(is.null(checkEqual)) checkEqual <- FALSE
+  if(!checkEqual) {
+      try(test_that(paste0("Identical test of coreRfeature (direct R vs. R nimbleFunction): ", input$name),
+                    expect_identical(out, out_nfR)))
+      try(test_that(paste0("Identical test of math (direct R vs. C++ nimbleFunction): ", input$name),
+                    expect_identical(out, out_nfC)))
+  } else {
+      try(test_that(paste0("Equal test of coreRfeature (direct R vs. R nimbleFunction): ", input$name),
+                    expect_equal(out, out_nfR)))
+      try(test_that(paste0("Equal test of math (direct R vs. C++ nimbleFunction): ", input$name),
+                    expect_equal(out, out_nfC)))
+  }
+  # unload DLL as R doesn't like to have too many loaded
+  if(.Platform$OS.type != 'windows') nimble:::clearCompiled(nfR) ##dyn.unload(project$cppProjects[[1]]$getSOName())
+  invisible(NULL)
+
+}
+
 gen_runFun <- function(input) {
   runFun <- function() {}
   formalsList <- vector('list', length(input$inputDim))
@@ -43,12 +164,9 @@ make_input <- function(dim, size = 3, logicalArg) {
 test_math <- function(input, verbose = TRUE, size = 3, dirName = NULL) {
   if(verbose) cat("### Testing", input$name, "###\n")
   runFun <- gen_runFun(input)
-  nfR <- nimbleFunction(  # formerly nfGen
-      #       setup = TRUE,
+  nfR <- nimbleFunction(  
              run = runFun)
-  #nfR <- nfGen()
-##  project <- nimble:::nimbleProjectClass(NULL, name = 'foo')
-  nfC <- compileNimble(nfR, dirName = dirName)##, project = project)
+  nfC <- compileNimble(nfR, dirName = dirName)
 
   nArgs <- length(input$inputDim)
   logicalArgs <- rep(FALSE, nArgs)
@@ -368,7 +486,7 @@ test_mcmc <- function(example, model, data = NULL, inits = NULL,
 
 
 test_filter <- function(example, model, data = NULL, inits = NULL,
-                        verbose = TRUE, numItsR = 5, numItsC = 10000,
+                        verbose = TRUE, numItsR = 3, numItsC = 10000,
                         basic = TRUE, exactSample = NULL, results = NULL, resultsTolerance = NULL,
                         numItsC_results = numItsC,
                         seed = 0, filterType = NULL, latentNodes = NULL, filterControl = NULL,
@@ -507,9 +625,9 @@ test_filter <- function(example, model, data = NULL, inits = NULL,
       return(c(mean = mean(vals), sd = sd(vals), quantile(vals, .025), quantile(vals, .975)))
 
     if(doCpp) {
-      if(verbose) {
-        try(print(apply(C_samples[, , drop = FALSE], 2, summarize_posterior)))
-      }
+      # if(verbose) {
+      #   try(print(apply(C_samples[, , drop = FALSE], 2, summarize_posterior)))
+      # }
     }
   }
 
@@ -544,7 +662,6 @@ test_filter <- function(example, model, data = NULL, inits = NULL,
         latentSampLength <- length(latentNames)
         latentDim <- latentSampLength/dim(C_weights)[2]
         samplesToWeightsMatch[latentIndices] <- rep(1:dim(C_weights)[2], each = latentDim )
-
       }
       for(metric in names(results)) {
         if(!metric %in% c('mean', 'median', 'sd', 'var', 'cov', 'll'))
@@ -600,6 +717,9 @@ test_filter <- function(example, model, data = NULL, inits = NULL,
         }
       }
     }
+  }
+  if(verbose) {
+    try(print(apply(as.matrix(C_samples), 2, summarize_posterior)))  ## print summaries of equally weighted samples
   }
   if(returnSamples) {
     if(exists('CmvSample'))
@@ -662,6 +782,7 @@ test_size <- function(input, verbose = TRUE) {
                       expect_equal(!is(result, "try-error"), input$expectPass,
                                   info = errorMsg)))
     }
+    
     if(verbose) cat("### Testing", input$name, "with RHS constant ###\n")
     if(!is.null(input$expectPassWithConst)) input$expectPass <- input$expectPassWithConst
     result <- try(
@@ -679,6 +800,19 @@ test_size <- function(input, verbose = TRUE) {
     }
     invisible(NULL)
 }
+
+# could redo test_size to always expect specific error, but not taking time to do that now
+test_size_specific_error <- function(input, verbose = TRUE) {
+    errorMsg <- paste0(ifelse(input$knownProblem, "KNOWN ISSUE: ", ""), "Result does not match ", input$expectPass)
+    if(verbose) cat("### Testing", input$name, "###\n")
+    try(test_that(paste0("Test 1 of size/dimension check: ", input$name),
+                  expect_error(
+                      m <- nimbleModel(code = input$expr, data = input$data, inits = input$inits),
+                      regexp = input$correctErrorMsg,
+                      info = errorMsg)))    
+    invisible(NULL)
+}
+
 
 test_getBound <- function(model, cmodel, test, node, bnd, truth, info) {
     rtest <- test(model, node, bnd)

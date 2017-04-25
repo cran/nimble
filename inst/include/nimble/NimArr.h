@@ -3,6 +3,7 @@
 
 #include "NimArrBase.h"
 #include "Utils.h"
+#include <cstdlib>
 
 template<int ndim, class T>
   class NimArr;
@@ -86,7 +87,8 @@ public:
   }
 
   NimArr<1, T> &operator=(const NimArr<1, double> &other) {return(templateCopyOperator<double>(other));}
-  NimArr<1, T> &operator=(const NimArr<1, int> &other) {return(templateCopyOperator<int>(other));}  
+  NimArr<1, T> &operator=(const NimArr<1, int> &other) {return(templateCopyOperator<int>(other));}
+  NimArr<1, T> &operator=(const NimArr<1, bool> &other) {return(templateCopyOperator<bool>(other));}  
 
   NimArr<1, T> (const NimArr<1, T> &other) :
   NimArrBase<T>(other)
@@ -189,12 +191,19 @@ public:
     if(init) { NimArrBase<T>::fillAllValues(value); }
   }
 
+  void initialize(T value, bool init, bool fillZeros, bool recycle, int is1) {
+    setSize(is1, false, false);
+    if(init) { NimArrBase<T>::fillAllValues(value, fillZeros, recycle); }
+  }
+  
   void setSize(int is1, bool copyValues = true, bool fillZeros = true) {
     NimArrBase<T>::NAdims[0] = size1 = is1;
     NimArrBase<T>::NAstrides[0] = NimArrBase<T>::stride1 = 1;
     NimArrBase<T>::setLength(size1, copyValues, fillZeros);
   }
-  virtual void setSize(vector<int> sizeVec) {setSize(sizeVec[0]);}
+  virtual void setSize(vector<int> sizeVec, bool copyValues = true, bool fillZeros = true) {
+    setSize(sizeVec[0], copyValues, fillZeros);
+  }
   virtual int numDims() const {return(1);}
   virtual int dimSize(int i) const {
     switch(i) {
@@ -207,7 +216,11 @@ public:
   }
 };
 
-
+template<class T>
+void dimNimArr(NimArr<1, int> &output, NimArrBase<T> &input) {
+  output.setSize(input.numDims(), false, false);
+  std::copy(input.dim(), input.dim() + input.numDims(), output.getPtr()); 
+}
 
 // Here is the specialization for 2 dimensions.
 
@@ -217,8 +230,13 @@ public:
   int size1, size2, stride2;
   int calculateIndex(int i, int j) const {return(NimArrBase<T>::offset + NimArrBase<T>::stride1 * i + stride2 * j);} // j * s1 + i);}
   int calculateIndex(vector<int> &i) const {return(calculateIndex(i[0], i[1]));};
-    T &operator()(int i, int j) const {return((*NimArrBase<T>::vPtr)[calculateIndex(i, j)]);} // could add asserts here
-
+  T &operator()(int i, int j) const {return((*NimArrBase<T>::vPtr)[calculateIndex(i, j)]);} // could add asserts here
+  
+  T &operator[](int i) const {
+    std::div_t divRes = std::div(i, size1);
+    return((*NimArrBase<T>::vPtr)[calculateIndex(divRes.rem, floor(divRes.quot))]);
+  }
+    
   ~NimArr<2, T>() {};
 
   template<class Tother>
@@ -414,6 +432,11 @@ public:
     if(init) { NimArrBase<T>::fillAllValues(value); }
   }
 
+  void initialize(T value, bool init, bool fillZeros, bool recycle, int is1, int is2) {
+    setSize(is1, is2, false, false);
+    if(init) { NimArrBase<T>::fillAllValues(value, fillZeros, recycle); }
+  }
+  
   void setSize(int is1, int is2, bool copyValues = true, bool fillZeros = true) {
       NimArrBase<T>::NAdims[0] = size1 = is1; 
       NimArrBase<T>::NAdims[1] = size2 = is2;
@@ -421,8 +444,8 @@ public:
       NimArrBase<T>::NAstrides[0] = NimArrBase<T>::stride1 = 1;
       NimArrBase<T>::NAstrides[1] = stride2 = is1;
     }
-    virtual void setSize(vector<int> sizeVec) {
-      setSize(sizeVec[0], sizeVec[1]);
+    virtual void setSize(vector<int> sizeVec, bool copyValues = true, bool fillZeros = true) {
+      setSize(sizeVec[0], sizeVec[1], copyValues, fillZeros);
     }
     virtual int numDims() const {return(2);}
     virtual int dimSize(int i) const {
@@ -447,6 +470,12 @@ class NimArr<3, T> : public NimArrBase<T> {
   int calculateIndex(int i, int j, int k) const {return(NimArrBase<T>::offset + NimArrBase<T>::stride1 * i + stride2 * j + stride3 * k);} //k * s1s2 + j*s1 + i);}
   int calculateIndex(vector<int> &i) const {return(calculateIndex(i[0], i[1], i[2]));};
   T &operator()(int i, int j, int k) const {return((*NimArrBase<T>::vPtr)[calculateIndex(i, j, k)]);} // could add asserts here
+
+  T &operator[](int i) const {
+    std::div_t divRes1 = std::div(i, size1);
+    std::div_t divRes2 = std::div(floor(divRes1.quot), size2);
+    return((*NimArrBase<T>::vPtr)[calculateIndex(divRes1.rem, divRes2.rem, floor(divRes2.quot))]);
+  }
 
   ~NimArr<3, T>() {};
 
@@ -673,6 +702,11 @@ class NimArr<3, T> : public NimArrBase<T> {
     if(init) { NimArrBase<T>::fillAllValues(value); }
   }
 
+  void initialize(T value, bool init, bool fillZeros, bool recycle, int is1, int is2, int is3) {
+    setSize(is1, is2, is3, false, false);
+    if(init) { NimArrBase<T>::fillAllValues(value, fillZeros, recycle); }
+  }
+  
   void setSize(int is1, int is2, int is3, bool copyValues = true, bool fillZeros = true) {
     NimArrBase<T>::NAdims[0] = size1 = is1;
     NimArrBase<T>::NAdims[1] = size2 = is2;
@@ -684,7 +718,9 @@ class NimArr<3, T> : public NimArrBase<T> {
   }
 
   
-  virtual void setSize(vector<int> sizeVec) {setSize(sizeVec[0], sizeVec[1], sizeVec[2]);}
+  virtual void setSize(vector<int> sizeVec, bool copyValues = true, bool fillZeros = true) {
+    setSize(sizeVec[0], sizeVec[1], sizeVec[2], copyValues, fillZeros);
+  }
   virtual int numDims() const {return(3);}
   virtual int dimSize(int i) const {
     switch(i) {
@@ -712,6 +748,13 @@ class NimArr<4, T> : public NimArrBase<T> {
   int calculateIndex(vector<int> &i) const {return(calculateIndex(i[0], i[1], i[2], i[3]));};
   T &operator()(int i, int j, int k, int l) const {return((*NimArrBase<T>::vPtr)[calculateIndex(i, j, k, l)]);} // could add asserts here
 
+  T &operator[](int i) const {
+    std::div_t divRes1 = std::div(i, size1);
+    std::div_t divRes2 = std::div(floor(divRes1.quot), size2);
+    std::div_t divRes3 = std::div(floor(divRes2.quot), size3);
+    return((*NimArrBase<T>::vPtr)[calculateIndex(divRes1.rem, divRes2.rem, divRes3.rem, floor(divRes3.quot))]);
+  }
+  
   ~NimArr<4, T>() {};
 
   template<class Tother>
@@ -964,6 +1007,11 @@ class NimArr<4, T> : public NimArrBase<T> {
     if(init) { NimArrBase<T>::fillAllValues(value); }
   }
 
+  void initialize(T value, bool init, bool fillZeros, bool recycle, int is1, int is2, int is3, int is4) {
+    setSize(is1, is2, is3, is4, false, false);
+    if(init) { NimArrBase<T>::fillAllValues(value, fillZeros, recycle); }
+  }
+
   void setSize(int is1, int is2, int is3, int is4, bool copyValues = true, bool fillZeros = true) {
     NimArrBase<T>::NAdims[0] = size1 = is1;
     NimArrBase<T>::NAdims[1] = size2 = is2;
@@ -976,7 +1024,9 @@ class NimArr<4, T> : public NimArrBase<T> {
     NimArrBase<T>::setLength(stride4 * size4, copyValues, fillZeros);
   }
 
-  virtual void setSize(vector<int> sizeVec) {setSize(sizeVec[0], sizeVec[1], sizeVec[2], sizeVec[3]);}
+  virtual void setSize(vector<int> sizeVec, bool copyValues = true, bool fillZeros = true) {
+    setSize(sizeVec[0], sizeVec[1], sizeVec[2], sizeVec[3], copyValues, fillZeros);
+  }
   virtual int numDims() const {return(4);}
   virtual int dimSize(int i) const {
     switch(i) {

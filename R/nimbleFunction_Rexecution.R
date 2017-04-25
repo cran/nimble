@@ -1,6 +1,66 @@
 ###		These functions are used for calculate/sim/getLP for the nodeFunctionVectors
 ###		Can either enter model, nodes or model_nodes
 
+#' NIMBLE language functions for R-like vector construction
+#'
+#' These functions can be used in nimbleFunctions and compiled using \code{compileNimble}.
+#' 
+#' @name nimble-R-functions
+#' 
+#' @param ... values to be concatenated.
+#' @param x vector of values to be replicated (\code{rep}) or logical array or vector (\code{which}) or object whose length is wanted (\code{length}) or input value (\code{diag}).
+#' @param from starting value of sequence.
+#' @param to end value of sequence.
+#' @param by increment of the sequence.
+#' @param length.out desired length of the sequence.
+#'
+#' @aliases nimC nimRep nimSeq c rep seq which length diag
+#'
+#' @details
+#' For \code{c}, \code{rep}, \code{seq}, these functions are NIMBLE's version of similar R functions, e.g., \code{nimRep} for \code{rep}.   In a \code{nimbleFunction}, either the R name (e.g., \code{rep}) or the NIMBLE name (e.g., \code{nimRep}) can be used.  If the R name is used, it will be converted to the NIMBLE name. For \code{which}, \code{length}, \code{diag}, simply use the standard name without \code{"nim"}. These functions largely mimic (see exceptions below) the behavior of their R counterparts, but they can be compiled in a \code{nimbleFunction} using \code{compileNimble}.
+#' 
+#' \code{nimC} is NIMBLE's version of \code{c} and behaves identically.
+#'
+#' \code{nimRep} is NIMBLE's version of \code{rep}.  It should behave identically to \code{rep}.  There are no NIMBLE versions of \code{rep.int} or \code{rep_len}.
+#'
+#' \code{nimSeq} is NIMBLE's version of \code{seq}.  It behaves like \code{seq} with support for \code{from}, \code{to}, \code{by} and \code{length.out} arguments.  The \code{along.with} argument is not supported.  There are no NIMBLE versions of \code{seq.int}, \code{seq_along} or \code{seq_len}, with the exception that \code{seq_along} can take a nimbleFunctionList as an argument to provide the index range of a for-loop (User Manual Ch. 13). 
+#'
+#' \code{which} behaves like the R version but without support for \code{arr.ind} or \code{useNames} arguments.
+#'
+#' \code{diag} behaves like the R version but without support for the \code{nrow} and \code{ncol} arguments.
+#'
+#' \code{length} behaves like the R version.
+NULL
+
+#' @rdname nimble-R-functions
+#' @export
+nimC <- function(...) {
+    c(...)
+}
+
+#' @rdname nimble-R-functions
+#' @export
+nimRep <- function(x, ...) {
+    rep(x, ...)
+}
+
+#' @rdname nimble-R-functions
+#' @export
+nimSeq <- function(from, to, by, length.out) { ## this creates default arguments filled in at keyword matching that are then useful in cppOutput step to determine if C++ should use nimSeqBy or nimSeqLen
+    haveBy <- !missing(by)
+    haveLen <- !missing(length.out)
+    if(haveBy)
+        if(haveLen)
+            seq(from, to, by, length.out)
+        else
+            seq(from, to, by)
+    else
+        if(haveLen)
+            seq(from, to, length.out = length.out)
+        else
+            seq(from, to)
+}
+
 #' Explicitly declare objects created in setup code to be preserved and compiled as member data
 #'
 #' Normally a \code{nimbleFunction} determines what objects from \code{setup} code need to be preserved for \code{run} code or other member functions.  \code{setupOutputs} allows explicit declaration for cases when an object created in setup output is not use in member functions.
@@ -18,12 +78,15 @@ NULL
 
 #' Halt execution of a nimbleFunction function method.  Part of the NIMBLE language
 #'
+#'
 #' @param msg Character object to be output as an error message
+#'
+#' @aliases stop
 #'
 #' @author Perry de Valpine
 #' @export
 #' @details
-#' The NIMBLE stop is similar to the native R stop, but it takes only one argument, the error message to be output.  During uncompiled NIMBLE execution, nimStop simply calls R's stop funtion. During compiled execution it calls the error function from the R headers.  stop is an alias for nimStop in the NIMBLE language  
+#' The NIMBLE \code{stop} is similar to the native R \code{stop}, but it takes only one argument, the error message to be output.  During uncompiled NIMBLE execution, \code{nimStop} simply calls R's stop funtion. During compiled execution it calls the error function from the R headers.  \code{stop} is an alias for \code{nimStop} in the NIMBLE language  
 nimStop <- function(msg) stop(msg, call. = FALSE)
 # we use call.=FALSE because otherwise the error msg indicates the
 # error itself occurs in nimStop() and not in the calling frame
@@ -236,23 +299,6 @@ getBound <- function(model, node, bound, nodeFunctionIndex) {
 }
 
 
-## getParam <- function(model, node, param) {
-##     if(missing(param)) { ## already converted by keyword conversion
-##         nodeFunction <- model
-##         paramInfo <- node
-##     } else {
-##         ## not already converted
-##         nodeFunction <- model$nodes[[node]]
-##         paramInfo <- makeParamInfo(model, node, param)
-##     }
-##     paramID <- paramInfo$paramID
-##     nDim <- paramInfo$nDim
-##     type <- paramInfo$type
-##     funName <- paste0('getParam_',nDim,'D_',type)
-##     ans <- eval(substitute(nodeFunction$FUNNAME(paramID), list(FUNNAME = as.name(funName))))
-##     return(ans)
-## }
-
 #' @export
 nimSwitch <- function(paramID, IDoptions, ...) {
     dotsList <- eval(substitute(alist(...)))
@@ -263,28 +309,21 @@ nimSwitch <- function(paramID, IDoptions, ...) {
 
 rCalcNodes <- function(model, nfv){ ##nodeFunctionVector
     l_Prob = 0
-
-    ## if(inherits(model, 'CmodelBaseClass') & !getNimbleOption('buildInterfacesForCompiledNestedNimbleFunctions')) {
-    ##     stop('calling compiled model from R calculate() or other functions is not supported yet for newNodeFunction system.')
-    ##     for(nName in nodes)
-    ##         l_Prob = l_Prob + model$nodes[[nName]][[1]]$callMemberFunction(model$nodes[[nName]][[2]], 'calculate')
-    ## } else {
-        model <- nfv$model
+    model <- nfv$model
     useCompiledNonNestedInterface <- inherits(model, 'CmodelBaseClass') & !getNimbleOption('buildInterfacesForCompiledNestedNimbleFunctions')
     indexingInfo <- nfv$indexingInfo
-        declIDs <- indexingInfo$declIDs
-        numNodes <- length(declIDs)
-        if(numNodes < 1) return(l_Prob)
-        unrolledIndicesMatrixRows <- indexingInfo$unrolledIndicesMatrixRows
-        for(i in 1:numNodes) {
-            declID <- declIDs[i]
-            unrolledIndicesMatrixRow <- model$modelDef$declInfo[[declID]]$unrolledIndicesMatrix[ unrolledIndicesMatrixRows[i], ]
-            if(useCompiledNonNestedInterface) {
-                l_Prob = l_Prob + model$nodeFunctions[[ declID ]][[1]]$callMemberFunction(model$nodeFunctions[[ declID ]][[2]], 'calculate', unrolledIndicesMatrixRow)
-            } else
-                l_Prob = l_Prob + model$nodeFunctions[[ declID ]]$calculate(unrolledIndicesMatrixRow) ## must use nodeFunctions to have declID ordering
-        }
-##    }
+    declIDs <- indexingInfo$declIDs
+    numNodes <- length(declIDs)
+    if(numNodes < 1) return(l_Prob)
+    unrolledIndicesMatrixRows <- indexingInfo$unrolledIndicesMatrixRows
+    for(i in 1:numNodes) {
+        declID <- declIDs[i]
+        unrolledIndicesMatrixRow <- model$modelDef$declInfo[[declID]]$unrolledIndicesMatrix[ unrolledIndicesMatrixRows[i], ]
+        if(useCompiledNonNestedInterface) {
+            l_Prob = l_Prob + model$nodeFunctions[[ declID ]][[1]]$callMemberFunction(model$nodeFunctions[[ declID ]][[2]], 'calculate', unrolledIndicesMatrixRow)
+        } else
+            l_Prob = l_Prob + model$nodeFunctions[[ declID ]]$calculate(unrolledIndicesMatrixRow) ## must use nodeFunctions to have declID ordering
+    }
     return(l_Prob)
 }
 
@@ -292,28 +331,21 @@ getNodeFunctionIndexedInfo <- function(indexedNodeInfo, iCol) indexedNodeInfo[iC
 
 rCalcDiffNodes <- function(model, nfv){
     l_Prob <- 0
-
-    ## if(inherits(model, 'CmodelBaseClass') & !getNimbleOption('buildInterfacesForCompiledNestedNimbleFunctions')) {
-    ##     stop('calling compiled model from R calculateDiff() or other functions is not supported yet for newNodeFunction system.')
-    ##     for(nName in nodes)
-    ##         l_Prob = l_Prob + model$nodes[[nName]][[1]]$callMemberFunction(model$nodes[[nName]][[2]], 'calculateDiff')
-    ## } else {
-        model <- nfv$model
+    model <- nfv$model
     useCompiledNonNestedInterface <- inherits(model, 'CmodelBaseClass') & !getNimbleOption('buildInterfacesForCompiledNestedNimbleFunctions')
-        indexingInfo <- nfv$indexingInfo
-        declIDs <- indexingInfo$declIDs
-        numNodes <- length(declIDs)
-        if(numNodes < 1) return(l_Prob)
-        unrolledIndicesMatrixRows <- indexingInfo$unrolledIndicesMatrixRows
-        for(i in 1:numNodes) {
-            declID <- declIDs[i]
-            unrolledIndicesMatrixRow <- model$modelDef$declInfo[[declID]]$unrolledIndicesMatrix[ unrolledIndicesMatrixRows[i], ]
-            if(useCompiledNonNestedInterface) {
-                l_Prob = l_Prob + model$nodeFunctions[[ declID ]][[1]]$callMemberFunction(model$nodeFunctions[[ declID ]][[2]], 'calculateDiff', unrolledIndicesMatrixRow)
-            } else
-                l_Prob = l_Prob + model$nodeFunctions[[ declID ]]$calculateDiff(unrolledIndicesMatrixRow) ## must use nodeFunctions to have declID ordering
-        }
-##    }
+    indexingInfo <- nfv$indexingInfo
+    declIDs <- indexingInfo$declIDs
+    numNodes <- length(declIDs)
+    if(numNodes < 1) return(l_Prob)
+    unrolledIndicesMatrixRows <- indexingInfo$unrolledIndicesMatrixRows
+    for(i in 1:numNodes) {
+        declID <- declIDs[i]
+        unrolledIndicesMatrixRow <- model$modelDef$declInfo[[declID]]$unrolledIndicesMatrix[ unrolledIndicesMatrixRows[i], ]
+        if(useCompiledNonNestedInterface) {
+            l_Prob = l_Prob + model$nodeFunctions[[ declID ]][[1]]$callMemberFunction(model$nodeFunctions[[ declID ]][[2]], 'calculateDiff', unrolledIndicesMatrixRow)
+        } else
+            l_Prob = l_Prob + model$nodeFunctions[[ declID ]]$calculateDiff(unrolledIndicesMatrixRow) ## must use nodeFunctions to have declID ordering
+    }
     return(l_Prob)
 }
 
@@ -338,7 +370,7 @@ rCalcDiffNodes <- function(model, nfv){
 #' 
 #' Simulation is defined for a stochastic node as drawing a random value from its distribution, and for deterministic node as equivalent to calculate.
 #'
-#' getLogProb simply collects the sum of the log probabilities of nodes if they are known to have already been calculated.
+#' getLogProb collects and returns the sum of the log probabilities of nodes, using the log probability values currently stored in the model (as generated from the most recent call to calculate on each node)
 #'
 #' These functions can be used from R or in NIMBLE run-time functions that will be compiled.  When executed in R (including when an uncompiled nimbleFunction is executed), they can be slow because the nodes are expanded each time.  When compiled in NIMBLE, the nodes are expanded only once during compilation, so execution will be much faster.
 #'
@@ -367,22 +399,6 @@ calculate <- function(model, nodes, nodeFxnVector, nodeFunctionIndex)
     }	
 }
 
-## calculate <- function(model, nodes, nodeFxnVector)		
-## {
-##     if(!missing(nodeFxnVector)){
-##         model <- nodeFxnVector$model
-##         nodes <- nodeFxnVector$getNodeNames()
-##         return(rCalcNodes(model, nodes))
-##     }
-##     if(inherits(model, 'modelBaseClass') ){
-##         if(missing(nodes) ) 
-##             nodes <- model$getMaps('nodeNamesLHSall')
-##         nfv <- nodeFunctionVector(model, nodes)
-##         nodeNames <- nfv$getNodeNames()
-##         return(rCalcNodes(model, nodeNames))
-##     }	
-## }
-
 #' @rdname nodeFunctions
 #' @export
 calculateDiff <- function(model, nodes, nodeFxnVector, nodeFunctionIndex)		
@@ -400,28 +416,21 @@ calculateDiff <- function(model, nodes, nodeFxnVector, nodeFunctionIndex)
 
 rGetLogProbsNodes <- function(model, nfv){
     l_Prob = 0
-
-    ## if(inherits(model, 'CmodelBaseClass') & !getNimbleOption('buildInterfacesForCompiledNestedNimbleFunctions')) {
-    ##     stop('calling compiled model from R getLogProb() or other functions is not supported yet for newNodeFunction system.')
-    ##     for(nName in nodes)
-    ##         l_Prob = l_Prob + model$nodes[[nName]][[1]]$callMemberFunction(model$nodes[[nName]][[2]], 'getLogProb')
-    ## } else {
-        model <- nfv$model
+    model <- nfv$model
     useCompiledNonNestedInterface <- inherits(model, 'CmodelBaseClass') & !getNimbleOption('buildInterfacesForCompiledNestedNimbleFunctions')
-        indexingInfo <- nfv$indexingInfo
-        declIDs <- indexingInfo$declIDs
-        numNodes <- length(declIDs)
-        if(numNodes < 1) return(l_Prob)
-        unrolledIndicesMatrixRows <- indexingInfo$unrolledIndicesMatrixRows
-        for(i in 1:numNodes) {
-            declID <- declIDs[i]
-            unrolledIndicesMatrixRow <- model$modelDef$declInfo[[declID]]$unrolledIndicesMatrix[ unrolledIndicesMatrixRows[i], ]
-            if(useCompiledNonNestedInterface) {
-                l_Prob = l_Prob + model$nodeFunctions[[ declID ]][[1]]$callMemberFunction(model$nodeFunctions[[ declID ]][[2]], 'getLogProb', unrolledIndicesMatrixRow)
-            } else
-                l_Prob = l_Prob + model$nodeFunctions[[ declID ]]$getLogProb(unrolledIndicesMatrixRow) ## must use nodeFunctions to have declID ordering
-        }
-##    }
+    indexingInfo <- nfv$indexingInfo
+    declIDs <- indexingInfo$declIDs
+    numNodes <- length(declIDs)
+    if(numNodes < 1) return(l_Prob)
+    unrolledIndicesMatrixRows <- indexingInfo$unrolledIndicesMatrixRows
+    for(i in 1:numNodes) {
+        declID <- declIDs[i]
+        unrolledIndicesMatrixRow <- model$modelDef$declInfo[[declID]]$unrolledIndicesMatrix[ unrolledIndicesMatrixRows[i], ]
+        if(useCompiledNonNestedInterface) {
+            l_Prob = l_Prob + model$nodeFunctions[[ declID ]][[1]]$callMemberFunction(model$nodeFunctions[[ declID ]][[2]], 'getLogProb', unrolledIndicesMatrixRow)
+        } else
+            l_Prob = l_Prob + model$nodeFunctions[[ declID ]]$getLogProb(unrolledIndicesMatrixRow) ## must use nodeFunctions to have declID ordering
+    }
     return(l_Prob)
 }
 
@@ -442,30 +451,22 @@ getLogProb <- function(model, nodes, nodeFxnVector, nodeFunctionIndex)
 
 
 rSimNodes <- function(model, nfv){
-    
-    ## if(inherits(model, 'CmodelBaseClass') & !getNimbleOption('buildInterfacesForCompiledNestedNimbleFunctions')) {
-        ##stop('calling compiled model from R simulate() or other functions is not supported yet for newNodeFunction system.')
-        ## for(nName in nodes) {
-        ##     model$nodes[[nName]][[1]]$callMemberFunction(model$nodes[[nName]][[2]], 'simulate')
-        ## }
-    ##} else {
-        model <- nfv$model
-        useCompiledNonNestedInterface <- inherits(model, 'CmodelBaseClass') & !getNimbleOption('buildInterfacesForCompiledNestedNimbleFunctions')
-        indexingInfo <- nfv$indexingInfo
-        declIDs <- indexingInfo$declIDs
-        numNodes <- length(declIDs)
-        if(numNodes < 1) return()
-        unrolledIndicesMatrixRows <- indexingInfo$unrolledIndicesMatrixRows
-        for(i in 1:numNodes) {
-            declID <- declIDs[i]
-            unrolledIndicesMatrixRow <- model$modelDef$declInfo[[declID]]$unrolledIndicesMatrix[ unrolledIndicesMatrixRows[i], ]
-            if(useCompiledNonNestedInterface) {
-                model$nodeFunctions[[ declID ]][[1]]$callMemberFunction(model$nodeFunctions[[ declID ]][[2]], 'simulate', unrolledIndicesMatrixRow)
-                
-            } else
-                model$nodeFunctions[[ declID ]]$simulate(unrolledIndicesMatrixRow) ## must use nodeFunctions to have declID ordering
-        }
-    ##}
+    model <- nfv$model
+    useCompiledNonNestedInterface <- inherits(model, 'CmodelBaseClass') & !getNimbleOption('buildInterfacesForCompiledNestedNimbleFunctions')
+    indexingInfo <- nfv$indexingInfo
+    declIDs <- indexingInfo$declIDs
+    numNodes <- length(declIDs)
+    if(numNodes < 1) return()
+    unrolledIndicesMatrixRows <- indexingInfo$unrolledIndicesMatrixRows
+    for(i in 1:numNodes) {
+        declID <- declIDs[i]
+        unrolledIndicesMatrixRow <- model$modelDef$declInfo[[declID]]$unrolledIndicesMatrix[ unrolledIndicesMatrixRows[i], ]
+        if(useCompiledNonNestedInterface) {
+            model$nodeFunctions[[ declID ]][[1]]$callMemberFunction(model$nodeFunctions[[ declID ]][[2]], 'simulate', unrolledIndicesMatrixRow)
+            
+        } else
+            model$nodeFunctions[[ declID ]]$simulate(unrolledIndicesMatrixRow) ## must use nodeFunctions to have declID ordering
+    }
 }
 
 #' @rdname nodeFunctions
@@ -531,7 +532,6 @@ getValuesAccess <- function(access) {
 
 
 setValuesAccess <- function(input, access) {
-
     toCode <- makeSetCodeFromAccessorVector(access)
     mapInfo <- makeMapInfoFromAccessorVector(access) ## inefficient to do both of these, but we need the lengths!
     if(length(toCode)==0) return(NULL)
@@ -545,7 +545,6 @@ setValuesAccess <- function(input, access) {
         nextIndex <- nextIndex + nextLength
     }
     invisible(NULL)
-
 }
 
 
@@ -560,12 +559,12 @@ setValuesAccess <- function(input, access) {
 # @author NIMBLE development team
 # @export
 # @details
-# Calling setValues(P, model, nodes) will place values from P, in order, into the nodes provided for the model.  This is being deprecated by
-# values(model, nodes) <- P, but the development syntax of setValues(P, model, nodes) is still supported.
+# Calling \code{setValues(P, model, nodes)} will place values from P, in order, into the nodes provided for the model.  This is deprecated by
+# \code{values(model, nodes) <- P}, but the development syntax of \code{setValues(P, model, nodes)} is still supported.
 #
 # When provided nodes are from matrices or arrays, the values will filled following column-wise order.
 #
-# The reverse of setValues(P, model, nodes) is getValues(P, model, nodes), which is being deprecated by P <- values(model, nodes)
+# The reverse of \code{setValues(P, model, nodes)} is \code{getValues(P, model, nodes}, which is deprecated by \code{P <- values(model, nodes)}.
 #
 # These functions work in R and in NIMBLE run-time code that can be compiled.
 #
@@ -588,6 +587,7 @@ setValues <- function(input, model, nodes){
 #' @param model       a NIMBLE model object, either compiled or uncompiled
 #' @param nodes       a vector of node names, allowing index blocks that will be expanded
 #' @param value       value to set the node(s) to
+#' @param accessorIndex For internal NIMBLE use only
 #' 
 #' @author NIMBLE development team
 #' @export
@@ -605,7 +605,7 @@ setValues <- function(input, model, nodes){
 #' These functions work in R and in NIMBLE run-time code that can be compiled.
 #'
 #' @return A vector of values concatenated from the provided nodes in the model
-values <- function(model, nodes){
+values <- function(model, nodes, accessorIndex){
 	ans <- NA
 	getValues(ans, model, nodes, parent.frame())
 	ans
@@ -615,7 +615,7 @@ values <- function(model, nodes){
 
 #' @rdname values 
 #' @export
-`values<-` <- function(model, nodes, value){
+`values<-` <- function(model, nodes, accessorIndex, value){
 	setValues(value, model, nodes)
 	return(model)
 }
@@ -632,7 +632,9 @@ values <- function(model, nodes){
 #' @param rowTo		If \code{to} is a modelValues, the row which will be copied to. If \code{rowTo == NA}, will automatically be set to \code{row}
 #' @param logProb	A logical value indicating whether the log probabilities of the given nodes should also be copied (i.e. if \code{nodes = 'x'}
 #' and \code{logProb = TRUE}, then both \code{'x'} and \code{'logProb_x'} will be copied)
-#' 
+#'
+#' @aliases copy
+#'
 #' @author Clifford Anderson-Bergman
 #' @export
 #' @details
@@ -674,9 +676,8 @@ nimCopy <- function(from, to, nodes = NULL, nodesTo = NULL, row = NA, rowTo = NA
         nodes = from$getVarNames(includeLogProb = logProb) ## allNodeNames(from)
     if( inherits(from, "modelBaseClass") ){
         accessFrom = modelVariableAccessorVector(from, nodes, logProb = logProb)
-    }
-    else
-        if(inherits(from, "modelValuesBaseClass")) {
+    } else
+        if(inherits(from, "modelValuesBaseClass") || inherits(from, "CmodelValues")) {
             accessFrom = modelValuesAccessorVector(from, nodes, logProb = logProb)
             if(is.na(row))
                 stop("Error: need to supply 'row' for a modelValues copy")
@@ -689,8 +690,7 @@ nimCopy <- function(from, to, nodes = NULL, nodesTo = NULL, row = NA, rowTo = NA
             accessTo = modelVariableAccessorVector(to, nodes, logProb = logProb)
         else
             accessTo = modelVariableAccessorVector(to, nodesTo, logProb = logProb)
-    }
-    else
+    } else
         if(inherits(to, "modelValuesBaseClass")) {
             if(is.null(nodesTo) ) 
                 accessTo = modelValuesAccessorVector(to, nodes, logProb = logProb)
@@ -699,8 +699,7 @@ nimCopy <- function(from, to, nodes = NULL, nodesTo = NULL, row = NA, rowTo = NA
             if(is.na(rowTo))
                 rowTo = row
             ##accessTo$setRow(rowTo) ## NEW ACCESSORS
-        }
-        else stop('argument "to" in nimCopy is neither a model nor modelValues')
+        } else stop('argument "to" in nimCopy is neither a model nor modelValues')
 
     sourceToObject <- accessTo[[1]]
     sourceFromObject <- accessFrom[[1]]
@@ -715,15 +714,6 @@ nimCopy <- function(from, to, nodes = NULL, nodesTo = NULL, row = NA, rowTo = NA
             eval(setCode[[i]]) ## oneValue is hard-wired in. may have rowTo hardwired in
         }
     }
-    
-    ## lengthTo <- length(accessTo$code) ## NEW ACCESSORS
-    ## if(length(accessFrom$code) != lengthTo)
-    ##     stop('unequal number of entries in nimCopy') 
-    ## if(lengthTo > 0){
-    ##     for(i in 1:lengthTo){
-    ##         accessTo$setValues( i, accessFrom$getValues(i) )
-    ##     }
-    ## }
 }
 
 #' Access or set a member variable of a nimbleFunction
@@ -853,9 +843,7 @@ nfMethod <- function(nf, methodName) {
 #' #[1] 3 3 4 4 4
 rankSample <- function(weights, size, output, silent = FALSE) {
     ##cat('in R version rankSample\n')
-    if(!is.loaded('rankSample'))
-        stop('rankSample does not work because we have not loaded any nimble code yet')
-    assign(as.character(substitute(output)), .Call('rankSample', as.numeric(weights), as.integer(size), as.integer(output), as.logical(silent)), envir = parent.frame())
+    assign(as.character(substitute(output)), .Call('C_rankSample', as.numeric(weights), as.integer(size), as.integer(output), as.logical(silent)), envir = parent.frame())
 }
 
 #' print function for use in nimbleFunctions
@@ -864,6 +852,8 @@ rankSample <- function(weights, size, output, silent = FALSE) {
 #'
 #' @details The keyword \code{print} in nimbleFunction run-time code will be automatically turned into \code{nimPrint}.  This is a function that prints its arguments in order using \code{cat} in R, or using \code{std::cout} in C++ code generated by compiling nimbleFunctions.
 #' Non-scalar numeric objects can be included, although their output will be formatted slightly different in uncompiled and compiled nimbleFunctions.
+#'
+#' @aliases print
 #'
 #' @examples
 #' ans <- matrix(1:4, nrow = 2) ## R code, not NIMBLE code
@@ -880,6 +870,8 @@ nimPrint <- function(...) {
 #' cat function for use in nimbleFunctions
 #'
 #' @param ...  an arbitrary set of arguments that will be printed in sequence.
+#'
+#' @aliases cat
 #'
 #' @details
 #'
@@ -903,97 +895,106 @@ nimCat <- function(...) {
 }
 
 
-#' Creates a numeric vector for use in NIMBLE DSL functions
+#' Creates numeric, integer or logical vectors for use in nimbleFunctions
 #'
-#' In a \code{nimbleFunction}, \code{numeric} is identical to \code{nimNumeric}
+#' In a \code{nimbleFunction}, \code{numeric}, \code{integer} and \code{logical} are identical to \code{nimNumeric}, \code{nimInteger} and \code{nimLogical}, respectively.
 #'
-#' See the User Manual for usage examples.
+#' @aliases nimInteger nimLogical numeric integer logical
 #'
 #' @param length the length of the vector (default = 0)
-#' @param value the initial value for each element of the vector (default = 0)
+#' @param value value(s) for initializing the vector (default = 0).  This may be a vector, matrix or array but will be used as a vector.
 #' @param init logical, whether to initialize elements of the vector (default = TRUE)
+#' @param fillZeros logical, whether to initialize any elements not filled by (possibly recycled) \code{value} with 0 (or FALSE for \code{nimLogical}) (default = TRUE)
+#' @param recycle logical, whether \code{value} should be recycled to fill the entire \code{length} of the new vector (default = TRUE)
 #'
 #' @details
-#' When used in a \code{nimbleFunction} (in \code{run} or other member function), \code{numeric} is a synonym for \code{nimNumeric}.  When used with only the \code{length} argument, this behaves similarly to R's \code{integer} function.  NIMBLE provides additional arguments to control the initialization value and whether or not initialization will occur.  Using \code{init=FALSE} when initialization is not necessary can make compiled nimbleFunctions a bit faster.
+#' These functions are similar to R's \code{\link{numeric}}, \code{\link{integer}}, \code{\link{logical}} functions, but they can be used in a nimbleFunction and then compiled using \code{compileNimble}.  Largely for compilation purposes, finer control is provided over initialization behavior.  If \code{init = FALSE}, no initialization will be done, and \code{value}, \code{fillZeros} and \code{recycle} will be ignored.  If \code{init=TRUE} and \code{recycle=TRUE}, then \code{fillZeros} will be ignored, and \code{value} will be repeated (according to R's recycling rule) as much as necessary to fill a vector of length \code{length}.  If \code{init=TRUE} and \code{recycle=FALSE}, then if \code{fillZeros=TRUE}, values of 0 (or FALSE for \code{nimLogical}) will be filled in after \code{value} up to length \code{length}.  Compiled code will be more efficient if unnecessary initialization is not done, but this may or may not be noticeable depending on the situation.
 #' 
-#' @author Daniel Turek
+#' When used in a \code{nimbleFunction} (in \code{run} or other member function), \code{numeric}, \code{integer} and \code{logical} are immediately converted to \code{nimNumeric}, \code{nimInteger} and \code{nimLogical}, respectively.  
+#' 
+#' @author Daniel Turek, Chris Paciorek, Perry de Valpine
 #' @aliases numeric
-#' @seealso \code{\link{integer}} \code{\link{matrix}} \code{\link{array}}
+#' @seealso \code{\link{nimMatrix}}, \code{\link{nimArray}}
 #' @export
-nimNumeric <- function(length = 0, value = 0, init = TRUE) {
+nimNumeric <- function(length = 0, value = 0, init = TRUE, fillZeros = TRUE, recycle = TRUE) {
     fillValue <- makeFillValue(value, 'double', init)
-    rep(fillValue, length)
+    makeReturnVector(fillValue, length, recycle)
 }
 
-
-#' Creates an integer vector for use in NIMBLE DSL functions
-#'
-#' In a \code{nimbleFunction}, \code{integer} is identical to \code{nimInteger}
-#'
-#' See the User Manual for usage examples.
-#'
-#' @param length the length of the vector (default = 0)
-#' @param value the initial value for each element of the vector (default = 0L).  Only used if \code{init} is \code{TRUE}.
-#' @param init logical, whether to initialize elements of the vector (default = TRUE).
-#'
-#' @details
-#' When used in a \code{nimbleFunction} (in \code{run} or other member function), \code{integer} is a synonym for \code{nimInteger}.  When used with only the \code{length} argument, this behaves similarly to R's \code{integer} function.  NIMBLE provides additional arguments to control the initialization value and whether or not initialization will occur.  Using \code{init=FALSE} when initialization is not necessary can make compiled nimbleFunctions a bit faster.
-#' 
-#' @author Daniel Turek
-#' @aliases integer
-#' @seealso \code{\link{numeric}} \code{\link{matrix}} \code{\link{array}}
+#' @rdname nimNumeric
 #' @export
-nimInteger <- function(length = 0, value = 0, init = TRUE) {
+nimInteger <- function(length = 0, value = 0, init = TRUE, fillZeros = TRUE, recycle = TRUE) {
     fillValue <- makeFillValue(value, 'integer', init)
-    rep(fillValue, length)
+    makeReturnVector(fillValue, length, recycle)
+}
+
+#' @rdname nimNumeric
+#' @export
+nimLogical <- function(length = 0, value = 0, init = TRUE, fillZeros = TRUE, recycle = TRUE) {
+    fillValue <- makeFillValue(value, 'logical', init)
+    makeReturnVector(fillValue, length, recycle)
+}
+
+#' Creates matrix or array objects for use in nimbleFunctions
+#' 
+#' In a \code{nimbleFunction}, \code{matrix} and \code{array} are identical to \code{nimMatrix} and \code{nimArray}, respectively
+#'
+#' @aliases nimArray matrix array
+#'
+#' @param value value(s) for initialization (default = 0).  This can be a vector, matrix or array, but it will be used as a vector.
+#' @param nrow the number of rows in a matrix (default = 1)
+#' @param ncol the number of columns in a matrix (default = 1)
+#' @param dim vector of dimension sizes in an array (default = \code{c(1, 1)})
+#' @param init logical, whether to initialize values (default = \code{TRUE})
+#' @param fillZeros logical, whether to initialize any elements not filled by (possibly recycled) \code{value} with 0 (or \code{FALSE} for \code{nimLogical}) (default = \code{TRUE})
+#' @param recycle logical, whether \code{value} should be recycled to fill the entire contents of the new object (default = \code{TRUE})
+#' @param type character representing the data type, i.e. \code{'double'}, \code{'integer'}, or \code{'logical'} (default = \code{'double'})
+#' @param nDim number of dimensions in an array.  This is only necessary for \code{compileNimble} if the length of \code{dim} cannot be determined during compilation.
+#'
+#' @details
+#' These functions are similar to R's \code{\link{matrix}} and \code{\link{array}} functions, but they can be used in a nimbleFunction and compiled using \code{compileNimble}.  Largely for compilation purposes, finer control is provided over initialization behavior, similarly to \code{\link{nimNumeric}}, \code{\link{nimInteger}}, and \code{\link{nimLogical}}. If \code{init = FALSE}, no initialization will be done, and \code{value}, \code{fillZeros} and \code{recycle} will be ignored.  If \code{init=TRUE} and \code{recycle=TRUE}, then \code{fillZeros} will be ignored, and \code{value} will be repeated (according to R's recycling rule) as much as necessary to fill the object.  If \code{init=TRUE} and \code{recycle=FALSE}, then if \code{fillZeros=TRUE}, values of 0 (or FALSE for \code{nimLogical}) will be filled in after \code{value}.  Compiled code will be more efficient if unnecessary initialization is not done, but this may or may not be noticeable depending on the situation.
+#'
+#' When used in a \code{nimbleFunction} (in \code{run} or other member function), \code{matrix} and \code{array} are immediately converted to \code{nimMatrix} and \code{nimArray}, respectively.
+#'
+#' The \code{nDim} argument is only necessary for a use like \code{dim <- c(2, 3, 4); A <- nimArray(0, dim = dim, nDim = 3)}.  It is necessary because the NIMBLE compiler must determine during compilation that \code{A} will be a 3-dimensional numeric array.  However, the compiler doesn't know for sure what the length of \code{dim} will be at run time, only that it is a vector.  On the other hand,   \code{A <- nimArray(0, dim = c(2, 3, 4))} is allowed because the compiler can directly determine that a vector of length three is constructed inline for the \code{dim} argument.
+#' 
+#' @author Daniel Turek and Perry de Valpine
+#' @seealso \code{\link{nimNumeric}} \code{\link{nimInteger}} \code{\link{nimLogical}}
+#' @export
+nimMatrix <- function(value = 0, nrow = NA, ncol = NA, init = TRUE, fillZeros = TRUE, recycle = TRUE, type = 'double') {
+    ## the -1's are used because nimble does not allow both missingness and default value
+    ## but R's matrix function relies on both possibilities
+    fillValue <- makeFillValue(value, type, init)
+    mnrow <- missing(nrow) || is.na(nrow)
+    mncol <- missing(ncol) || is.na(ncol)
+    if(mnrow)
+        if(mncol) {
+            base::matrix(fillValue)
+        } else {
+            nrow <- ceiling( length(fillValue) / ncol )
+            fillValue <- makeReturnVector(fillValue, nrow * ncol, recycle)
+            base::matrix(fillValue, ncol = ncol, nrow = nrow)
+        }
+    else
+        if(mncol) {
+            ncol <- ceiling( length(fillValue) / nrow )
+            fillValue <- makeReturnVector(fillValue, nrow * ncol, recycle)
+            base::matrix(fillValue, nrow = nrow, ncol = ncol)
+        } else {
+            fillValue <- makeReturnVector(fillValue, ncol*nrow, recycle)
+            base::matrix(fillValue, nrow = nrow, ncol = ncol)
+        }
 }
 
 
-#' Creates a matrix object for use in NIMBLE DSL functions
-#' 
-#' In a \code{nimbleFunction}, \code{matrix} is identical to \code{nimMatrix}
-#'
-#' See the User Manual for usage examples.
-#'
-#' @param value the initial value for each element of the matrix (default = 0)
-#' @param nrow the number of rows in the matrix (default = 1)
-#' @param ncol the number of columns in the matrix (default = 1)
-#' @param init logical, whether to initialize elements of the matrix (default = TRUE)
-#' @param type character representing the data type, i.e. 'double' or 'integer' (default = 'double')
-#'
-#' @details
-#' When used in a \code{nimbleFunction} (in \code{run} or other member function), \code{matrix} is a synonym for \code{nimMatrix}.  When used with only the first three arguments, this behaves similarly to R's \code{matrix} function.  NIMBLE provides additional arguments to control the initialization value, whether or not initialization will occur, and the type of scalar elements.  Using \code{init=FALSE} when initialization is not necessary can make compiled nimbleFunctions a bit faster.
-#' @author Daniel Turek
-#' @aliases matrix
-#' @seealso \code{\link{numeric}} \code{\link{integer}} \code{\link{array}}
+#' @rdname nimMatrix
 #' @export
-nimMatrix <- function(value = 0, nrow = 1, ncol = 1, init = TRUE, type = 'double') {
+nimArray <- function(value = 0, dim = c(1, 1), init = TRUE, fillZeros = TRUE, recycle = TRUE, nDim, type = 'double') {
+    if(!missing(nDim)) dim <- dim[1:nDim]
     fillValue <- makeFillValue(value, type, init)
-    base::matrix(fillValue, nrow, ncol)
-}
-
-
-#' Creates a array object of arbitrary dimension for use in NIMBLE DSL functions
-#'
-#' In a \code{nimbleFunction}, \code{array} is identical to \code{nimArray}
-#'
-#' See the User Manual for usage examples.
-#'
-#' @param value the initial value for each element of the array (default = 0)
-#' @param dim a vector specifying the dimensionality and sizes of the array, provided as c(size1, ...) (default = c(1, 1))
-#' @param init logical, whether to initialize elements of the matrix (default = TRUE)
-#' @param type character representing the data type, i.e. 'double' or 'integer' (default = 'double')
-#'
-#' @details
-#' When used in a \code{nimbleFunction} (in \code{run} or other member function), \code{array} is a synonym for \code{nimArray}.  When used with only the first two arguments, this behaves similarly to R's \code{array} function.  NIMBLE provides additional arguments to control the initialization value, whether or not initialization will occur, and the type of scalar elements.  Using \code{init=FALSE} when initialization is not necessary can make compiled nimbleFunctions a bit faster.
-#' 
-#' @author Daniel Turek
-#' @aliases array
-#' @seealso \code{\link{numeric}} \code{\link{integer}} \code{\link{matrix}}
-#' @export
-nimArray <- function(value = 0, dim = c(1, 1), init = TRUE, type = 'double') {
-    fillValue <- makeFillValue(value, type, init)
-    base::array(fillValue, dim)
+    fillValue <- makeReturnVector(fillValue, prod(dim), recycle)
+    if(length(dim) == 1) fillValue
+    else base::array(fillValue, dim)
 }
 
 makeFillValue <- function(value, type, init) {
@@ -1001,9 +1002,34 @@ makeFillValue <- function(value, type, init) {
     fillValueTyped <- switch(type,
                              double = as.numeric(fillValue),
                              integer = as.integer(fillValue),
-                             ##logical = as.logical(fillValue),
+                             logical = as.logical(fillValue),
                              stop('unknown type argument'))
     return(fillValueTyped)
+}
+
+makeReturnVector <- function(fillValue, length, recycle) {
+    if(length(fillValue) == 1) {
+        if(recycle)
+            rep(fillValue, length)
+        else
+            c(fillValue, as(rep(0, max(length-1, 0)), class(fillValue)))
+    }
+    else {
+        if(length(fillValue) != length) {
+            if(length(fillValue) < length) {
+                ##warning(paste0("Not enough values provided for vector of length ",length, ".")) 
+                if(recycle)
+                    rep(fillValue, length.out = length)
+                else
+                    c(fillValue, as(rep(0, length-length(fillValue)), class(fillValue)))
+            } else {
+                ##warning(paste0("Too many values provided for vector of length ",length, ".")) 
+                fillValue[1:length]
+            }
+        } else {
+            fillValue
+        }
+    }
 }
 
 
@@ -1054,6 +1080,10 @@ declare <- function(name, def){
     }
     if(length(dims) != nDim)
         stop('in declare, dimensions are not declared properly')
+    if(prod(dims)==1) {
+        if(length(dims) == 1)
+            return(assign(as.character(name), value, envir = parent.frame()))
+    }
     assign(as.character(name), array(value, dim = dims), envir = parent.frame() )
 }
 
@@ -1062,5 +1092,5 @@ is.na.vec <- function(x) any(is.na(x))
 
 is.nan.vec <- function(x) any(is.nan(x))
 
+#' @export
 nimRound <- round
-

@@ -284,7 +284,7 @@ Details: The return value is a numeric vector with an element for each parameter
                                       return(dim)
                                   },
 
-                                  getVarNames = function(includeLogProb = FALSE, nodes, includeData = TRUE) {                                  
+                                  getVarNames = function(includeLogProb = FALSE, nodes) {
                                       '
 Returns the names of all variables in a model, optionally including the logProb variables
 
@@ -302,10 +302,13 @@ nodes: An optional character vector supplying a subset of nodes for which to ext
                                           if(!all(ans %in% modelDef$varNames))
                                               stop(c('invalid node names provided to model$getVarNames') )
                                       }
-                                      if(!includeData) {
-                                          allData <- unlist(lapply(mget(ans, envir = tm$isDataEnv, inherits = FALSE, ifnotfound = TRUE), all))
-                                          ans <- ans[!allData]
-                                      }
+                                      ## "includeData" argument to getVarNames (with default = TRUE) 
+                                      ## was removed by consensus, March 2017.
+                                      ## no uses of it anywhere in codebase, plus it errors out.
+                                      ##if(!includeData) {
+                                      ##    allData <- unlist(lapply(mget(ans, envir = tm$isDataEnv, inherits = FALSE, ifnotfound = TRUE), all))
+                                      ##    ans <- ans[!allData]
+                                      ##}
     	                              return(ans)
                                   },
 
@@ -454,7 +457,6 @@ Details: If a provided value (or the current value in the model when only a name
                                           ## intention is to flag these variables as 'data', and not change any model values.
                                           ## some inefficiency here (accesses model values, then re-sets the same model values),
                                           ## but this simplifies the addition without changing exisiting code.
-
                                            data = list(...)
                                            ## Check if a single list or character vector was provided
                                            if(length(data)==0) return()
@@ -573,7 +575,18 @@ Details: This provides a fairly raw representation of the graph (model) structur
                                           return(ans)
                                       }
                                   },
-                                  
+
+                                  getDependencyPathCountOneNode = function(node) {
+                                      if(length(node) > 1)
+                                          stop("getDependencyPathCountOneNode: argument 'node' should provide a single node.")
+                                      if(inherits(node, 'character')) {
+                                          node <- modelDef$nodeName2GraphIDs(node)
+                                      }
+                                      if(!inherits(node, 'numeric'))
+                                          stop("getDependencyPathCountOneNode: argument 'node' should be a character node name or a numeric node ID.")
+                                      modelDef$maps$nimbleGraph$getDependencyPathCountOneNode(node = node)
+                                  },
+
                                   getDependencies = function(nodes, omit = character(), self = TRUE,
                                       determOnly = FALSE, stochOnly = FALSE,
                                       includeData = TRUE, dataOnly = FALSE,
@@ -666,7 +679,7 @@ depIDs <- modelDef$maps$nimbleGraph$getDependencies(nodes = nodeIDs, omit = if(i
                                           return(retVal)
                                       }
                                       if(!(returnType %in% c('ids', 'names')))
-                                          stop('instead getDependencies, imporper returnType chosen')
+                                          stop('instead getDependencies, improper returnType chosen')
                                   },
                                   
                                   getDownstream = function(...) {
@@ -908,8 +921,8 @@ Details: The newly created model object will be identical to the original model 
                                           if(check) newlyCreatedModel$check()
                                           return(newlyCreatedModel)
                                       }
-                                      if(is.null(data)) data <- origData
-                                      if(is.null(inits)) inits <- origInits
+                                      if(is.null(data)) data <- if( inherits(origData, 'uninitializedField') ) list() else origData
+                                      if(is.null(inits)) inits <- if( inherits(origInits, 'uninitializedField') ) list() else origInits
                                       modelDef$newModel(data = data, inits = inits, modelName = modelName, check = check)
                                   }
                               )
@@ -1174,9 +1187,13 @@ makeBUGSclassFields <- function(vars, varDims) {
 ## This uses the activeBindingTemplate and plugs in the 3 needed names
 makeBUGSactiveBindingDef <- function(envVarName, varVarName, rowVarName, dims) {
     if(length(dims) == 0) dims <- 1
-    if(prod(dims) == 1)
-        template <- activeBindingTemplateLength1NonScalar
-    else
+    if(prod(dims) == 1) {
+        if(length(dims) > 1) {
+            template <- activeBindingTemplateLength1NonScalar
+        } else {
+            template <- activeBindingTemplateLength1Vector
+        }
+    } else
         template <- activeBindingTemplate
 
     eval( substitute( substitute(aBT, list(ENVNAME = as.name(envVarName), VARNAME = as.name(varVarName), ROWNAME = as.name(rowVarName), DIMNAME = dims)), list(aBT = template) ) )
@@ -1188,6 +1205,16 @@ activeBindingTemplateLength1NonScalar <- quote( function(value) {
     if(missing(value)) return(if(is.na(ROWNAME)) ENVNAME[[VARNAME]] else ENVNAME[[VARNAME]][[ROWNAME]]) ## commas will get inserted after ROWNAME
     else {
         value <- array(value, dim = DIMNAME)
+        if(is.na(ROWNAME)) ENVNAME[[VARNAME]] <- value
+        else ENVNAME[[VARNAME]][[ROWNAME]] <- value
+        return(invisible(value))
+    }
+})
+
+activeBindingTemplateLength1Vector <- quote( function(value) {
+    if(missing(value)) return(if(is.na(ROWNAME)) ENVNAME[[VARNAME]] else ENVNAME[[VARNAME]][[ROWNAME]]) ## commas will get inserted after ROWNAME
+    else {
+        value <- value[1]
         if(is.na(ROWNAME)) ENVNAME[[VARNAME]] <- value
         else ENVNAME[[VARNAME]][[ROWNAME]] <- value
         return(invisible(value))
