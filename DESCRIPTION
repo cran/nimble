@@ -4,11 +4,11 @@ Title: Flexible BUGS-Compatible System for Hierarchical Statistical
 Description: Flexible application of algorithms to models specified in the BUGS
     language. Algorithms can be written in the NIMBLE language and made available to
     any model.
-Version: 0.6-4
-Date: 2017-04-22
+Version: 0.6-5
+Date: 2017-06-06
 Maintainer: Christopher Paciorek <paciorek@stat.berkeley.edu>
 Author: Perry de Valpine, Christopher Paciorek, Daniel Turek, Cliff Anderson-
-    Bergman, Duncan Temple Lang
+    Bergman, Nick Michaud, Fritz Obermeyer, Duncan Temple Lang
 Depends: R (>= 3.1.2)
 Imports: methods,igraph,coda
 Suggests: testthat,R2WinBUGS,rjags,rstan,xtable,abind,ggplot2
@@ -54,11 +54,11 @@ Collate: config.R all_utils.R options.R distributions_inputList.R
         MCMC_conjugacy.R MCMC_suite.R MCMC_comparisons.R
         MCMC_autoBlock.R MCEM_build.R filtering_auxiliary.R
         filtering_liuwest.R filtering_enkf.R filtering_bootstrap.R
-        optimTools.R NF_utils.R miscFunctions.R makevars.R
+        NF_utils.R miscFunctions.R makevars.R
         setNimbleInternalFunctions.R registration.R nimble-package.r
         zzz.R
 RoxygenNote: 5.0.1
 NeedsCompilation: yes
-Packaged: 2017-04-25 12:21:40 UTC; paciorek
+Packaged: 2017-06-06 20:25:57 UTC; paciorek
 Repository: CRAN
-Date/Publication: 2017-04-25 14:33:04 UTC
+Date/Publication: 2017-06-06 22:14:14 UTC

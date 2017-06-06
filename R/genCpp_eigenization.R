@@ -1,4 +1,3 @@
-
 ######################################
 ## System to label for eigenization ##
 ######################################
@@ -112,7 +111,7 @@ eigenizeCalls <- c( ## component-wise unarys valid for either Eigen array or mat
 )
 
 eigenizeCallsBeforeRecursing <- c( ## These cannot be calls that trigger aliasRisk. ## getParam always triggers an intermediate so it should never need handling here
-    makeCallList(c('size','nimArr_dmnorm_chol', 'nimArr_dmvt_chol', 'nimArr_dwish_chol', 'nimArr_ddirch','calculate','calculateDiff','getLogProb', 'getParam', 'getBound', 'getNodeFunctionIndexedInfo', 'concatenateTemp', 'MAKE_FIXED_VECTOR', 'hardCodedVectorInitializer'), 'eigenize_doNotRecurse'),
+    makeCallList(c('size','nimArr_dmnorm_chol', 'nimArr_dmvt_chol', 'nimArr_dwish_chol', 'nimArr_dinvwish_chol', 'nimArr_ddirch','calculate','calculateDiff','getLogProb', 'getParam', 'getBound', 'getNodeFunctionIndexedInfo', 'concatenateTemp', 'MAKE_FIXED_VECTOR', 'hardCodedVectorInitializer'), 'eigenize_doNotRecurse'),
     list(coeffSetter = 'eigenize_coeffSetter',
          nfVar = 'eigenize_nfVar',
          chainedCall = 'eigenize_chainedCall',
@@ -436,22 +435,51 @@ promoteArgTypes <- function(code) {
     a1type <- code$args[[1]]$type
     a2type <- code$args[[2]]$type
     if(a1type == a2type) return(NULL)
-    if(code$name == '<-') return(eigenCast(code, 2, a1type))
-    if(a2type == 'double') return(eigenCast(code, 1, 'double'))
-    if(a1type == 'double') return(eigenCast(code, 2, 'double'))
-    if(a2type == 'integer') return(eigenCast(code, 1, 'integer'))
-    if(a1type == 'integer') return(eigenCast(code, 2, 'integer'))
-    ## Should never get past here, but for completeness:
-    if(a2type == 'logical') return(eigenCast(code, 1, 'logical'))
-    if(a1type == 'logical') return(eigenCast(code, 2, 'logical'))
+    ## at this point, we know both args are exprClass objects and their type doesn't match
+    argID <- 0
+    newType <- 'double'
+
+    if(code$name == '<-') {argID <- 2; newType <- a1type} ##return(eigenCast(code, 2, a1type))
+    ## because we know arg types don't match, pairs of conditions are mutually exclusive
+    if(argID == 0) {
+        if(a2type == 'double') { argID <- 1; newType <- 'double'} ##return(eigenCast(code, 1, 'double'))
+        if(a1type == 'double') {argID <-  2; newType <- 'double'} ## return(eigenCast(code, 2, 'double'))
+    }
+    if(argID == 0) {
+        if(a2type == 'integer') {argID <- 1; newType <- 'integer'} ##return(eigenCast(code, 1, 'integer'))
+        if(a1type == 'integer') {argID <- 2; newType <- 'integer'} ##return(eigenCast(code, 2, 'integer'))
+    }
+    if(argID == 0) {
+        ## Last two should never be needed, but for completeness:
+        if(a2type == 'logical') {argID <- 1; newType <- 'logical'} ##return(eigenCast(code, 1, 'logical'))
+        if(a1type == 'logical') {argID <- 2; newType <- 'logical'} ##return(eigenCast(code, 2, 'logical'))
+    }
+    if(argID != 0)
+        if(code$args[[argID]]$nDim > 0) 
+            eigenCast(code, argID, newType)
+        
+    NULL
+
+    ## if(code$name == '<-') return(eigenCast(code, 2, a1type))
+    ## if(a2type == 'double') return(eigenCast(code, 1, 'double'))
+    ## if(a1type == 'double') return(eigenCast(code, 2, 'double'))
+    ## if(a2type == 'integer') return(eigenCast(code, 1, 'integer'))
+    ## if(a1type == 'integer') return(eigenCast(code, 2, 'integer'))
+    ## ## Should never get past here, but for completeness:
+    ## if(a2type == 'logical') return(eigenCast(code, 1, 'logical'))
+    ## if(a1type == 'logical') return(eigenCast(code, 2, 'logical'))
+
+
 }
 
 promoteTypes <- function(code) {
     resultType <- code$type
     for(i in seq_along(code$args)) {
         if(inherits(code$args[[i]], 'exprClass')) {
-            if(code$args[[i]]$type != resultType) {
-                eigenCast(code, i, resultType)
+            if(code$args[[i]]$nDim > 0) {
+                if(code$args[[i]]$type != resultType) {
+                    eigenCast(code, i, resultType)
+                }
             }
         }
     }
@@ -787,6 +815,7 @@ eigenize_nfVar <- function(code, symTab, typeEnv, workEnv) { ## A lot like eigen
 
 eigenizeName <- function(code, symTab, typeEnv, workEnv) {
     targetSym <- symTab$getSymbolObject(code$name, TRUE)
+    if(is.null(targetSym)) stop(paste('Internal error: symbol not found:', code$name))
     if(inherits(targetSym, 'symbolNimbleList')) return(NULL)
     if(!exists('nDim', envir = targetSym, inherits = FALSE)) {
        ## contextCode <- if(!is.null(code$caller)) paste(unlist(nimDeparse(code$caller)), collapse = '\n') else character()

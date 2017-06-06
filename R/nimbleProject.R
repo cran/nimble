@@ -55,6 +55,8 @@ RCfunInfoClass <- setRefClass('RCfunInfoClass',
                                   nfMethodRCobj = 'ANY', ## an mfMethodRC
                                   RCfunProc     = 'ANY', ## an RCfunProcessing or NULL
                                   cppClass      = 'ANY',  ## an RCfunctionDef or NULL
+                                  RinitTypesProcessed = 'ANY',
+                                  Rcompiled           = 'ANY',
                                   fromModel     =  'ANY'		#'logical'
                                   ))
 
@@ -394,7 +396,7 @@ nimbleProjectClass <- setRefClass('nimbleProjectClass',
                                      if(!inherits(nfmObj, 'nfMethodRC')) stop("Can't add this function. nfmObj is not an nfMethodRC", call. = FALSE)
                                      className <- nfmObj$uniqueName
                                      if(is.null(RCfunInfos[[className]])) {
-                                         RCfunInfos[[className]] <<- RCfunInfoClass(nfMethodRCobj = nfmObj, RCfunProc = NULL, cppClass = NULL, fromModel = fromModel)
+                                         RCfunInfos[[className]] <<- RCfunInfoClass(nfMethodRCobj = nfmObj, RCfunProc = NULL, cppClass = NULL, fromModel = fromModel, RinitTypesProcessed = FALSE, Rcompiled = FALSE)
                                      }
                                      assign('nimbleProject', .self, envir = nfmObj) ## needed for clearCompiled(), i.e. safe dyn.unload()
                                  },
@@ -409,7 +411,7 @@ nimbleProjectClass <- setRefClass('nimbleProjectClass',
                                      if(inherits(ans, 'uninitializedField') )  return(NULL)                                     	 
                                      ans
                                  },
-                                 needRCfunCppClass = function(nfmObj, genNeededTypes = TRUE, control = list(debug = FALSE, debugCpp = FALSE), fromModel = FALSE) {
+                                 needRCfunCppClass = function(nfmObj, genNeededTypes = TRUE, initialTypeInference = FALSE, control = list(debug = FALSE, debugCpp = FALSE), fromModel = FALSE) {
                                      if(!inherits(nfmObj, 'nfMethodRC')) stop("Can't compile this function. nfmObj is not an nfMethodRC", call. = FALSE)
                                      className <- nfmObj$uniqueName
                                      Cname <- Rname2CppName(className)
@@ -417,7 +419,15 @@ nimbleProjectClass <- setRefClass('nimbleProjectClass',
                                      if(is.null(RCfunInfo)) addRCfun(nfmObj, fromModel = fromModel)
                                      if(is.null(RCfunInfos[[className]]$RCfunProc)) {
                                          RCfunInfos[[className]]$RCfunProc <<- RCfunProcessing$new(nfmObj, Cname)
-                                         RCfunInfos[[className]]$RCfunProc$process(debug = control$debug, debugCpp = control$debugCpp)
+                                     }
+                                     if(!RCfunInfos[[className]]$RinitTypesProcessed) {
+                                         RCfunInfos[[className]]$RCfunProc$process(debug = control$debug, debugCpp = control$debugCpp, initialTypeInferenceOnly = TRUE, nimbleProject = .self)
+                                         RCfunInfos[[className]]$RinitTypesProcessed <<- TRUE
+                                     }
+                                     if(initialTypeInference) return(RCfunInfos[[className]]$RCfunProc)
+                                     if(!RCfunInfos[[className]]$Rcompiled) {
+                                         RCfunInfos[[className]]$RCfunProc$process(debug = control$debug, debugCpp = control$debugCpp, initialTypeInferenceOnly = FALSE, nimbleProject = .self)
+                                         RCfunInfos[[className]]$Rcompiled <<- TRUE
                                      }
                                      cppClass <- RCfunInfos[[className]]$cppClass
                                      if(is.null(cppClass)) {
@@ -429,10 +439,11 @@ nimbleProjectClass <- setRefClass('nimbleProjectClass',
                                      }
                                      cppClass
                                  },
-                                 compileRCfun = function( fun, filename = NULL, control = list(debug = FALSE, debugCpp = FALSE, writeFiles = TRUE, returnAsList = FALSE), showCompilerOutput = nimbleOptions('showCompilerOutput')) {
+                                 compileRCfun = function( fun, filename = NULL, initialTypeInference = FALSE, control = list(debug = FALSE, debugCpp = FALSE, writeFiles = TRUE, returnAsList = FALSE), showCompilerOutput = nimbleOptions('showCompilerOutput')) {
                                      if(is.rcf(fun)) fun <- environment(fun)$nfMethodRCobject
-                                     addRCfun(fun) ## checks if it already exists and if it is an nfMethodRC
-                                     cppClass <- needRCfunCppClass(fun, genNeededTypes = TRUE, control = control)
+                                     addRCfun(fun) ## checks if it already exists and if it is an nfMethodRC ## redundant? done also in next step.
+                                     cppClass <- needRCfunCppClass(fun, genNeededTypes = TRUE, initialTypeInference = initialTypeInference, control = control)
+                                     if(initialTypeInference) return(cppClass) ## in this case cppClass with be an RCfunProc
                                      className <- fun$uniqueName
                                      if(control$writeFiles) {
                                          cppProj <- cppProjectClass(dirName = dirName)
@@ -700,7 +711,7 @@ nimbleProjectClass <- setRefClass('nimbleProjectClass',
                                      if(is.null(nfCompInfos[[generatorName]])) stop("It doesn't look like nfCompInfos was set up for this generator.  Call setupVirtualNimbleFunction first.", call. = FALSE) 
                                      if(inherits(nfCompInfos[[generatorName]]$nfProc, 'uninitializedField')) {## might always be FALSE by this point in processing
                                          if(is.character(vfun)) stop("vfun given as character but nfProc doesn't exist yet", call. = FALSE)
-                                         nfCompInfos[[generatorName]]$nfProc <<- virtualNFprocessing$new(vfun, generatorName)
+                                         nfCompInfos[[generatorName]]$nfProc <<- virtualNFprocessing$new(vfun, generatorName, project = .self)
                                      }
                                      if(!nfCompInfos[[generatorName]]$Rcompiled) {
                                          nfCompInfos[[generatorName]]$nfProc$process(control = control)
@@ -810,13 +821,16 @@ nimbleProjectClass <- setRefClass('nimbleProjectClass',
                                    if(!is.nl(nl)) stop("Can't instantiateNimbleList, nl is not a nimbleList")
                                    className <- nl$nimbleListDef$className
                                    nlCppDef <- getNimbleListCppDef(generatorName = className)
-                                   ok <- TRUE
+                                     ok <- TRUE
+                                     dllToUse <- if(isTRUE(nl.getDefinitionContent(nl.getGenerator(nl), 'predefined')))
+                                                     nimbleUserNamespace$sessionSpecificDll
+                                                 else dll
                                    if(asTopLevel) {
                                      if(is.null(nlCppDef$Rgenerator)) ok <- FALSE
-                                     else ans <- nlCppDef$Rgenerator(nl, dll = dll, project = .self)
+                                     else ans <- nlCppDef$Rgenerator(nl, dll = dllToUse, project = .self)
                                    } else {
                                      if(is.null(nlCppDef$CmultiInterface)) ok <- FALSE
-                                     else ans <- nlCppDef$CmultiInterface$addInstance(nl, dll = dll)
+                                     else ans <- nlCppDef$CmultiInterface$addInstance(nl, dll = dllToUse)
                                    }
                                    if(!ok) stop("Oops, there is something in this compilation job that doesn\'t fit together.  This can happen in some cases if you are trying to compile new pieces into an exising project.  If that is the situation, please try including \"resetFunctions = TRUE\" as an argument to compileNimble.  Alternatively please try rebuilding the project from the beginning with more pieces in the same call to compileNimble.  For example, if you are compiling multiple algorithms for the same model in multiple calls to compileNimble, try compiling them all with one call.", call. = FALSE) 
                                    ans
@@ -852,7 +866,11 @@ nimbleProjectClass <- setRefClass('nimbleProjectClass',
                                          nfCompInfos[[generatorName]]$labelMaker <<- NULL ## not needed?
                                      }
                                      if(inherits(nfCompInfos[[generatorName]]$nfProc, 'uninitializedField'))
-                                         nfCompInfos[[generatorName]]$nfProc <<- virtualNFprocessing$new(vfun, generatorName)
+                                         nfCompInfos[[generatorName]]$nfProc <<- virtualNFprocessing$new(vfun, generatorName, project = .self)
+                                     if(!nfCompInfos[[generatorName]]$Rcompiled) { ## to support nimbleLists, this step goes here now, so by size processing the method symbol tables will be set up
+                                         nfCompInfos[[generatorName]]$nfProc$process(control = control) ## there is no need for an initialTypeInference flag because that is *all* that a virtual NF really does anyway
+                                         nfCompInfos[[generatorName]]$Rcompiled <<- TRUE
+                                     }
                                      nfCompInfos[[generatorName]]$nfProc
                                  },
                                  compileNimbleFunctionMulti = function(funList, isNode = FALSE, filename = NULL, initialTypeInferenceOnly = FALSE,

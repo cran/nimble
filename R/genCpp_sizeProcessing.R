@@ -1,4 +1,4 @@
-assignmentAsFirstArgFuns <- c('nimArr_rmnorm_chol', 'nimArr_rmvt_chol', 'nimArr_rwish_chol', 'nimArr_rmulti', 'nimArr_rdirch', 'getValues', 'getValuesIndexRange', 'initialize', 'setWhich', 'setRepVectorTimes', 'assignVectorToNimArr', 'dimNimArr', 'assignNimArrToNimArr')
+assignmentAsFirstArgFuns <- c('nimArr_rmnorm_chol', 'nimArr_rmvt_chol', 'nimArr_rwish_chol', 'nimArr_rinvwish_chol', 'nimArr_rmulti', 'nimArr_rdirch', 'getValues', 'getValuesIndexRange', 'initialize', 'setWhich', 'setRepVectorTimes', 'assignVectorToNimArr', 'dimNimArr', 'assignNimArrToNimArr')
 setSizeNotNeededOperators <- c('setWhich', 'setRepVectorTimes')
 operatorsAllowedBeforeIndexBracketsWithoutLifting <- c('map','dim','mvAccessRow','nfVar')
 
@@ -16,6 +16,7 @@ sizeCalls <- c(makeCallList(binaryOperators, 'sizeBinaryCwise'),
                makeCallList(matrixSolveOperators, 'sizeSolveOp'), 
                makeCallList(matrixSquareOperators, 'sizeUnaryCwiseSquare'),
                makeCallList(nimbleListReturningOperators, 'sizeNimbleListReturningFunction'),
+               nimOptim = 'sizeOptim',
                list('debugSizeProcessing' = 'sizeProxyForDebugging',
                     diag = 'sizeDiagonal',
                     dim = 'sizeDim',
@@ -71,8 +72,8 @@ sizeCalls <- c(makeCallList(binaryOperators, 'sizeBinaryCwise'),
                makeCallList(paste0(c('d','q','p'), 'exp'), 'sizeRecyclingRule'),
                rexp = 'sizeRecyclingRuleRfunction',
                makeCallList(c('isnan','ISNAN','ISNA'), 'sizeScalarRecurse'),
-               makeCallList(c('nimArr_dmnorm_chol', 'nimArr_dmvt_chol', 'nimArr_dwish_chol', 'nimArr_dmulti', 'nimArr_dcat', 'nimArr_dinterval', 'nimArr_ddirch'), 'sizeScalarRecurse'),
-               makeCallList(c('nimArr_rmnorm_chol', 'nimArr_rmvt_chol', 'nimArr_rwish_chol', 'nimArr_rmulti', 'nimArr_rdirch'), 'sizeRmultivarFirstArg'),
+               makeCallList(c('nimArr_dmnorm_chol', 'nimArr_dmvt_chol', 'nimArr_dwish_chol', 'nimArr_dinvwish_chol', 'nimArr_dmulti', 'nimArr_dcat', 'nimArr_dinterval', 'nimArr_ddirch'), 'sizeScalarRecurse'),
+               makeCallList(c('nimArr_rmnorm_chol', 'nimArr_rmvt_chol', 'nimArr_rwish_chol', 'nimArr_rinvwish_chol', 'nimArr_rmulti', 'nimArr_rdirch'), 'sizeRmultivarFirstArg'),
                makeCallList(c('decide', 'size', 'getsize','getNodeFunctionIndexedInfo', 'endNimbleTimer'), 'sizeScalar'),
                makeCallList(c('calculate','calculateDiff', 'getLogProb'), 'sizeScalarModelOp'),
                simulate = 'sizeSimulate',
@@ -129,6 +130,14 @@ exprClasses_setSizes <- function(code, symTab, typeEnv) { ## input code is exprC
                     code$toEigenize <- 'maybe'
                 }
             }
+            ## Add RCfunctions to neededRCfuns.
+            if(exists(code$name) && is.rcf(get(code$name))) {
+                nfmObj <- environment(get(code$name))$nfMethodRCobject
+                uniqueName <- nfmObj$uniqueName
+                if (is.null(typeEnv$neededRCfuns[[uniqueName]])) {
+                    typeEnv$neededRCfuns[[uniqueName]] <- nfmObj
+                }
+            }
             ## Note that generation of a symbol for LHS of an assignment is done in the sizeAssign function, which is the handler for assignments
             return(NULL)
         }
@@ -168,7 +177,9 @@ exprClasses_setSizes <- function(code, symTab, typeEnv) { ## input code is exprC
                 if(is.null(typeEnv$neededRCfuns[[uniqueName]])) {
                     typeEnv$neededRCfuns[[uniqueName]] <- nfmObj
                 }
-                return(sizeRCfunction(code, symTab, typeEnv, nfmObj))
+                ## new with nimbleLists: we need to initiate compilation here so we can get full returnType information, including of nimbleLists
+                RCfunProc <- typeEnv$.nimbleProject$compileRCfun(obj, initialTypeInference = TRUE)
+                return(sizeRCfunction(code, symTab, typeEnv, nfmObj, RCfunProc))
             }
         }
     }
@@ -357,49 +368,84 @@ sizeRecyclingRuleRfunction <- function(code, symTab, typeEnv) {
     code$sizeExprs <- newSizeExprs
     code$type <- 'double' ## will need to look up from a list
     code$nDim <- 1
-    code$toEigenize <- TRUE
+    code$toEigenize <- 'yes'
     return(asserts)
 }
 
 
+concatenateIntermLabelMaker <- labelFunctionCreator("ConcatenateInterm")
+
 sizeConcatenate <- function(code, symTab, typeEnv) { ## This is two argument version
     asserts <- recurseSetSizes(code, symTab, typeEnv)
 
-    ## must recurse to get nDims set
+    ## overall strategy is to separate runs of scaalrs and non-scalars
+    ## also in C++ we don't take arbitrary arguments.  Instead we chain together calls in groups of 4
+    ##     e.g. c(a1, a2, a3, a4, a5) will become c( c(a1, a2, a3, a4), a5)
+    
+    ## first puzzle is with nimC(scalar1, scalar2, vector1, scalar3)
+    ## we need to extract the runs of scalars like (scalar1, scalar2), so they can be packed up in an object together.
     isScalar <- unlist(lapply(code$args, function(x) if(inherits(x, 'exprClass')) x$nDim == 0 else TRUE))
-    ##isExprClass <- unlist(lapply(code$args, function(x) inherits(x, 'exprClass')))
+    ## run length encoding: This native R function returns information about repeats, so we can figure out how long each run of scalars is
     argRLE <- rle(isScalar)
+    ## How many arguments will we have after packing scalars together into single objects:
     newNumArgs <- sum(argRLE$values) + sum(argRLE$lengths[!argRLE$values]) ## number of scalar runs + sum of non-scalar runs * run-lengths
     newArgs <- vector(length(newNumArgs), mode = 'list')
     iInput <- 1
     iOutput <- 1
-    concatenateIntermLabelMaker <- labelFunctionCreator("ConcatenateInterm")
-    asserts <- NULL
+  ##  asserts <- NULL
     for(i in seq_along(argRLE$values)) {
         thisLength <- argRLE$lengths[i]
-        if(!(argRLE$values[i])) {
+        if(!(argRLE$values[i])) { ## it is a run of non-scalars, so pack them into the new argument list, newArgs
             newArgs[(iOutput-1) + (1:thisLength)] <- code$args[(iInput-1) + (1:thisLength)]
             iInput <- iInput + thisLength
             iOutput <- iOutput + thisLength
-        } else {
+        } else { ## it is a run of scalars, so construct an object for them
             newTempFixedName <- concatenateIntermLabelMaker()
             newTempVecName <- concatenateIntermLabelMaker()
+            ## Construct:
+            ## concatenateTemp(ConcatenateInterm_1),
+            ##   concatenateTemp is not output to C++. It is a placeholder
             newExpr <- exprClass(isName = FALSE, isCall = TRUE, isAssign = FALSE, name = "concatenateTemp", nDim = 1, sizeExprs = list(thisLength), type = 'double')
             setArg(newExpr, 1, exprClass(isName = TRUE, isCall = FALSE, isAssign = FALSE, name = newTempVecName, nDim = 1, sizeExprs = list(thisLength), type = 'double'))
+
+            ## hardCodedVectorInitializer is a wrapper for the "contents1, contents2, ..." below 
             valuesExpr <- quote(hardCodedVectorInitializer())
             thisType <- 'logical'
             for(j in 1:thisLength) {
-                valuesExpr[[j+1]] <- parse(text = nimDeparse(code$args[[iInput - 1 + j]]), keep.source = FALSE)[[1]]
-                if(inherits(code$args[[iInput - 1 + j]], 'exprClass'))
-                    thisType <- arithmeticOutputType(thisType, code$args[[iInput - 1 + j]]$type)
-                else
-                    thisType <- 'double'
+                thisArgIndex <- iInput - 1 + j
+                if(inherits(code$args[[thisArgIndex]], 'exprClass')) {
+                    if(!code$args[[thisArgIndex]]$isName) ## a little heavy-handed: lift any expression of any kind
+                        ## to avoid dealing with eigen or other handling inside initialization values
+                        ## This is necessary for cases like nimC(model[[node]][2], 1.2)
+                        ## because model[[node]] is a map
+                        asserts <- c(asserts, sizeInsertIntermediate(code, thisArgIndex, symTab, typeEnv))
+                    thisType <- arithmeticOutputType(thisType, code$args[[thisArgIndex]]$type)
+                } else {
+                    thisType <- storage.mode(code$args[[thisArgIndex]]) ##'double'
+                }
+                ## Putting a map, or a values access, through parse(nimDeparse) won't work
+                ## So we lift any expression element above.
+                ## This could be done more cleanly with more coding work.
+                ## STOPPED HERE: Why use parse(nimDeparse)?  I think mostly so we can use substitute below
+                ## 
+                valuesExpr[[j+1]] <- parse(text = nimDeparse(code$args[[thisArgIndex]]), keep.source = FALSE)[[1]]
+                ## if(inherits(code$args[[thisArgIndex]], 'exprClass'))
+                ##     thisType <- arithmeticOutputType(thisType, code$args[[thisArgIndex]]$type)
+                ## else
+                ##     thisType <- 'double'
             }
             newExpr$type <- thisType
             newExpr$args[[1]]$type <- thisType
             iInput <- iInput + thisLength
             if(thisType == 'integer') thisType <- 'int'
             if(thisType == 'logical') thisType <- 'bool'
+            ## MAKE_FIXED_VECTOR("ConcatenateInterm_2", "ConcatenateInterm_1", numArgs, values, type) goes through a customized output generator
+            ##  to create something like
+            ##    double ConcatenateIterm_1[] = {contents1, contents2}
+            ##    std::vector<double> ConcatenateInterm_2(ConcatenateInterm_1, ConcatenateInterm_1 + length)
+            ##  so there is one intermediate whose only purpose is to achieve initialization by value and a second intermediate copied from the first.
+            ##     The second intermediate can later be used in the templated nimCd/nimCi/nimCb
+            ## 
             newAssert <- substitute(MAKE_FIXED_VECTOR(newTempVecName, newTempFixedName, thisLength, valuesExpr, thisType),
                                     list(newTempVecName = newTempVecName, newTempFixedName = newTempFixedName,
                                          thisLength = as.numeric(thisLength), valuesExpr = valuesExpr, thisType = thisType))
@@ -410,6 +456,7 @@ sizeConcatenate <- function(code, symTab, typeEnv) { ## This is two argument ver
         }
     }
 
+    ## Next step: chain together multiple calls:
     maxArgsOneCall <- 4
     numArgGroups <- ceiling(newNumArgs / (maxArgsOneCall-1))
     splitArgIDs <- split(1:newNumArgs, rep(1:numArgGroups, each = maxArgsOneCall-1, length.out = newNumArgs))
@@ -427,7 +474,8 @@ sizeConcatenate <- function(code, symTab, typeEnv) { ## This is two argument ver
         newExprList[[i]] <- exprClass(isName = FALSE, isCall = TRUE, isAssign = FALSE, name = 'nimC', nDim = 1, toEigenize = 'yes', type = 'double')
         for(j in seq_along(splitArgIDs[[i]])) setArg(newExprList[[i]], j, newArgs[[splitArgIDs[[i]][j]]])
     }
-    ## Last step is to set up nesting and make sizeExprs
+
+    ## Last step is to set up nesting and make sizeExprs for each constructed argument
     for(i in seq_along(splitArgIDs)) {
         if(i != length(splitArgIDs)) {
             setArg(newExprList[[i]], maxArgsOneCall, newExprList[[i+1]])
@@ -529,83 +577,95 @@ sizeRep <- function(code, symTab, typeEnv) {
 }
 
 sizeNewNimbleList <- function(code, symTab, typeEnv){
-  ## code looks like: nimListDef$new(a = '', b = 12)
-  ## want to change code$caller to :
-  ## { nimList <- nimListDef$new()
-  ## nimList$a <- 10
-  ## nimList$b <- 12 }
-  ## accomplish this by copying code, getting arguments (e.g. a = 10, b = 12) from copied code and turning them into assignment 
-  ## exprs in code$caller, and setting first argument of code$caller to be nimList <- nimListDef$new()
-  listDefName <- code$args[[1]]$name
-  if(symTab$parentST$symbolExists(listDefName)){
-    listST <- symTab$getSymbolObject(listDefName, inherits = TRUE)
+    ## The code looks like: nimListDef$new(a = 10, b = 12).
+    ## We want to change code$caller to :
+    ## { nimList <- nimListDef$new()
+    ## nimList$a <- 10
+    ## nimList$b <- 12 }.
+    ## We accomplish this by copying code, getting arguments (e.g. a = 10, b = 12) from copied code and turning them into assignment 
+    ## exprs in code$caller, and setting first argument of code$caller to be nimList <- nimListDef$new().
+    
+    listDefName <- code$args[[1]]$name
+    if(symTab$symbolExists(listDefName, inherits = TRUE)){
+        listST <- symTab$getSymbolObject(listDefName, inherits = TRUE)
+    } else {
+        ## We need to establish the symbol and needed type.        
+        nlDef <- get(listDefName)
+        ## Need the nimbleProject!
+        nlp <- typeEnv$.nimbleProject$compileNimbleList(nlDef, initialTypeInference = TRUE)
+        className <- nl.getListDef(nlDef)$className
+        if(is.null(typeEnv$neededRCfuns[[className]])) {
+            newSym <- symbolNimbleList(name = listDefName, nlProc = nlp)
+            typeEnv$neededRCfuns[[className]] <- newSym
+        }
+        newDefSym <- symbolNimbleListGenerator(name = listDefName, nlProc = nlp)
+        symTab$addSymbol(newDefSym)
+        listST <- newDefSym
+    }
     code$type <- "nimbleList"
     code$sizeExprs <- listST
     code$toEigenize <- "maybe"
     code$nDim <- 0
-  }
-  else stop('Error in sizeNewNimbleList: listGenerator not found in parentST', call. = FALSE)
-  
-  asserts <- list()
-  asserts <- c(asserts, recurseSetSizes(code, symTab, typeEnv, useArgs = c(TRUE, rep(FALSE, length(code$args)-1))))
-  if(!(code$caller$name %in% assignmentOperators)){
-    intermediateAsserts <- sizeInsertIntermediate(code$caller, code$callerArgID, symTab, typeEnv)
-    ## intermediateAsserts can potentially have size setting stuff from sizeAssignAfterRecursing.
-    ## Not sure if that would ever happen in this context, but to be safe we'll use last element as the actual intermediate assignment
-    ## Embed the intermediate assignment in a '{' (so insertAssertions will recurse on it) and recurse on it
-    numIntermAsserts <- length(intermediateAsserts)
-    bracketedIntermAssert <- newBracketExpr(intermediateAsserts[numIntermAsserts])
-    exprClasses_setSizes(bracketedIntermAssert, symTab, typeEnv)
-    intermediateAsserts[[numIntermAsserts]] <- bracketedIntermAssert
-    asserts <- c(asserts, intermediateAsserts)
-    return(asserts)
-  }
-  if(length(code$args)>1){   
+    
+    asserts <- list()
+    asserts <- c(asserts, recurseSetSizes(code, symTab, typeEnv, useArgs = c(TRUE, rep(FALSE, length(code$args)-1))))
+    if(!(code$caller$name %in% assignmentOperators)){
+        intermediateAsserts <- sizeInsertIntermediate(code$caller, code$callerArgID, symTab, typeEnv)
+        ## intermediateAsserts can potentially have size setting stuff from sizeAssignAfterRecursing.
+        ## Not sure if that would ever happen in this context, but to be safe we'll use last element as the actual intermediate assignment.
+        ## Embed the intermediate assignment in a '{' (so insertAssertions will recurse on it) and recurse on it.
+        numIntermAsserts <- length(intermediateAsserts)
+        bracketedIntermAssert <- newBracketExpr(intermediateAsserts[numIntermAsserts])
+        exprClasses_setSizes(bracketedIntermAssert, symTab, typeEnv)
+        intermediateAsserts[[numIntermAsserts]] <- bracketedIntermAssert
+        asserts <- c(asserts, intermediateAsserts)
+        return(asserts)
+    }
+    if(length(code$args) <= 1) return(asserts)  ## There are no args to process.
+
     RnewExprs <- list()
     newExprs <- list()
     RnfVarExprs <- list()
     nfVarExprs <- list()
     exprCounter <- 1
     originalCode <- code 
-    listElements <- listST$nlProc$symTab$getSymbolNames() ##getSymbolObjects()
+    listElements <- listST$nlProc$symTab$getSymbolNames()
     RlistNameExpr <- nimbleGeneralParseDeparse(originalCode$caller$args[[1]])    
     for(i in seq_along(listElements)) {
-      thisVarName <- listElements[i]
-      ##      if(!inherits(originalCode$args[[i+1]], 'exprClass') ||  (originalCode$args[[i+1]]$name != "")){  ## skip first arg, which will be name of nlDef, then check if value is ""
-      if(!is.null(originalCode$args[[thisVarName]])) {
-        if(!inherits(originalCode$args[[thisVarName]], 'exprClass') ||  (originalCode$args[[thisVarName]]$name != "")){  ## skip first arg, which will be name of nlDef, then check if value is ""
-          ## nfVar(A, 'x') for whichever element name it's on ('x')
-          ##    RnfVarExprs[[exprCounter]] <- substitute(nfVar(A, X), list(A = RlistNameExpr, X = listElements[[i]]$name))
-          RnfVarExprs[[exprCounter]] <- substitute(nfVar(A, X), list(A = RlistNameExpr, X = thisVarName))
-          ## nfVar(A, 'x') <- y or whatever code was provided (already recursed for size processing)
-          RnewExprs[[exprCounter]] <- substitute(A <- B, list(A = RnfVarExprs[[exprCounter]],
-                                                              B = nimbleGeneralParseDeparse(originalCode$args[[thisVarName]])))
-          exprCounter <- exprCounter + 1
+        thisVarName <- listElements[i]
+        if(!is.null(originalCode$args[[thisVarName]])) {
+            ## Skip first arg, which will be name of nlDef, then check if value is "".
+            ## TODO Remove the test for empty string, since it is probably no longer necessary.
+            if(!inherits(originalCode$args[[thisVarName]], 'exprClass') || (originalCode$args[[thisVarName]]$name != "")) {
+                ## nfVar(A, 'x') for whichever element name it's on ('x')
+                RnfVarExprs[[exprCounter]] <- substitute(nfVar(A, X), list(A = RlistNameExpr, X = thisVarName))
+                ## nfVar(A, 'x') <- y or whatever code was provided (already recursed for size processing)
+                RnewExprs[[exprCounter]] <- substitute(A <- B, list(A = RnfVarExprs[[exprCounter]],
+                                                                    B = nimbleGeneralParseDeparse(originalCode$args[[thisVarName]])))
+                exprCounter <- exprCounter + 1
+            }
         }
-      }
     }
+    if(length(RnewExprs) == 0) return(asserts)  ## All args have already been specified.
     
-    ## embed RnewExprs in a '{' expression
-    if(length(RnewExprs) != 0) {
-      RbracketNewExprs <- quote(after({}))
-      RbracketNewExprs[[2]][2:(length(RnewExprs) + 1)] <- RnewExprs
-      bracketNewExprs <- RparseTree2ExprClasses(RbracketNewExprs)
-      ## Need to install assignment target in symTab if necessary so that it
-      ## will be there for recursion in the following step
-      assignmentTarget <- code$caller$args[[1]]
-      if(assignmentTarget$isName) {
+    ## Embed RnewExprs in a '{' expression.
+    RbracketNewExprs <- quote(after({}))
+    RbracketNewExprs[[2]][2:(length(RnewExprs) + 1)] <- RnewExprs
+    bracketNewExprs <- RparseTree2ExprClasses(RbracketNewExprs)
+    ## Need to install assignment target in symTab if necessary so that it
+    ## will be there for recursion in the following step.
+    assignmentTarget <- code$caller$args[[1]]
+    if(assignmentTarget$isName) {
         if(!symTab$symbolExists(assignmentTarget$name, TRUE)) {
-          symTab$addSymbol(symbolNimbleList(name = assignmentTarget$name, type = code$type, nlProc = code$sizeExprs$nlProc))
+            symTab$addSymbol(symbolNimbleList(name = assignmentTarget$name, type = code$type, nlProc = code$sizeExprs$nlProc))
         }
-      }
-      ## recurse into element assignments
-      exprClasses_setSizes(bracketNewExprs$args[[1]], symTab, typeEnv)
-      asserts <- c(asserts, list(bracketNewExprs))
-      if(length(code$args) > 1) ## always if we make it this far
-        code$args <- code$args[1]
     }
-  }
-  return(asserts)
+    ## Recurse into element assignments.
+    exprClasses_setSizes(bracketNewExprs$args[[1]], symTab, typeEnv)
+    asserts <- c(asserts, list(bracketNewExprs))
+    if(length(code$args) > 1) ## TODO Remove this conditional, since this should always be true if we make it this far.
+        code$args <- code$args[1]
+    return(asserts)
 }
 
 sizemap <- function(code, symTab, typeEnv) {
@@ -692,7 +752,7 @@ sizeNimArrayGeneral <- function(code, symTab, typeEnv) {
 
     annotationSizeExprs <- lapply(cSizeExprs$args, nimbleGeneralParseDeparse) ## and this is for purposes of the sizeExprs in the AST exprClass object
     
-    missingSizes <- unlist(lapply(cSizeExprs$args, identical, as.numeric(NA)))
+    missingSizes <- unlist(lapply(cSizeExprs$args, function(x) identical(x, as.numeric(NA)) | identical(x, NA))) ## note is.na doesn't work b/c the argument can be an expression and is.na warns on that ##old: identical, as.numeric(NA)))
     ## only case where we do something useful with missingSizes is matrix(value = non-scalar, ...)
     if(any(missingSizes)) {
         ## modify sizes in generated C++ line
@@ -977,18 +1037,71 @@ sizeNFvar <- function(code, symTab, typeEnv) {
     return(asserts)
 }
 
-
-
 sizeNimbleListReturningFunction <- function(code, symTab, typeEnv) {
   asserts <- recurseSetSizes(code, symTab, typeEnv)
   code$type <- 'nimbleList'
-  nlClassName <- nl.getListDef(nimbleListReturningFunctionList[[code$name]]$nlGen)$className
-  symbolObject <- symTab$getSymbolObject(nlClassName, inherits = TRUE)
+  nlGen <- nimbleListReturningFunctionList[[code$name]]$nlGen
+  nlDef <- nl.getListDef(nlGen)
+  className <- nlDef$className
+  symbolObject <- symTab$getSymbolObject(className, inherits = TRUE)
+  if(is.null(symbolObject)) {
+      nlp <- typeEnv$.nimbleProject$compileNimbleList(nlGen, initialTypeInference = TRUE)
+      symbolObject <- symbolNimbleListGenerator(name = className, nlProc = nlp)
+      symTab$addSymbol(symbolObject)
+  }
   code$sizeExprs <- symbolObject
-  code$toEigenize <- "yes"
+  code$toEigenize <- "yes"  # This is specialized for nimSvd and nimEigen.
   code$nDim <- 0
-  asserts <- c(asserts, sizeInsertIntermediate(code$caller, code$callerArgID, symTab, typeEnv))
+  if(!(code$caller$name %in% assignmentOperators))
+      asserts <- c(asserts, sizeInsertIntermediate(code$caller, code$callerArgID, symTab, typeEnv))
   if(length(asserts) == 0) NULL else asserts
+}
+
+sizeOptim <- function(code, symTab, typeEnv) {
+    asserts <- recurseSetSizes(code, symTab, typeEnv)
+    code$type <- 'nimbleList'
+    nlGen <- nimbleListReturningFunctionList[[code$name]]$nlGen
+    nlDef <- nl.getListDef(nlGen)
+    className <- nlDef$className
+    symbolObject <- symTab$getSymbolObject(className, inherits = TRUE)
+    if(is.null(symbolObject)) {
+        nlp <- typeEnv$.nimbleProject$compileNimbleList(nlGen, initialTypeInference = TRUE)
+        symbolObject <- symbolNimbleListGenerator(name = className, nlProc = nlp)
+        symTab$addSymbol(symbolObject)
+    }
+    code$sizeExprs <- symbolObject
+    code$toEigenize <- "no"
+    code$nDim <- 0
+
+    fnCode <- code$args$fn
+    if (fnCode$name == 'nfMethod') {
+        # This is handled in cppOutputNFmethod.
+    } else if(exists(fnCode$name) && is.rcf(get(fnCode$name))) {
+        # Handle fn arguments that are RCfunctions.
+        fnCode$name <- environment(get(fnCode$name))$nfMethodRCobject$uniqueName
+    } else {
+        stop(paste0('unsupported fn argument in optim(par, fn = ', fnCode$name, '); try an RCfunction or nfMethod instead'))
+    }
+
+    grCode <- code$args$gr
+    if (identical(grCode, "NULL")) {
+        # We simply emit "NULL".
+    } else if (grCode$name == 'nfMethod') {
+        # This is handled in cppOutputNFmethod.
+    } else if(exists(grCode$name) && is.rcf(get(grCode$name))) {
+        # Handle gr arguments that are RCfunctions.
+        grCode$name <- environment(get(grCode$name))$nfMethodRCobject$uniqueName
+    } else {
+        stop(paste0('unsupported gr argument in optim(par, gr = ', grCode$name, '); try an RCfunction or nfMethod instead'))
+    }
+
+    for(arg in c(code$args$lower, code$args$upper)) {
+        if(inherits(arg, 'exprClass') && arg$toEigenize=='yes') {
+            asserts <- c(asserts, sizeInsertIntermediate(code, arg$callerArgID, symTab, typeEnv))
+        }
+    }
+
+    if(length(asserts) == 0) NULL else asserts
 }
 
 sizeCppPointerDereference <- function(code, symTab, typeEnv) {
@@ -1047,11 +1160,12 @@ sizeChainedCall <- function(code, symTab, typeEnv) { ## options include nfMethod
 
     if(!is.character(methodName)) stop(exprClassProcessingErrorMsg(code, 'In handling X$Y: Something is wrong with Y.'), call. = FALSE)
 
+    nfProc <- symbolObject$nfProc
+    if(is.null(nfProc)) {
+        stop(exprClassProcessingErrorMsg(code, 'In handling X$Y(): Symbols for X have not been set up.'), call. = FALSE)
+    }
     if(isSymFun) {
-        nfProc <- symbolObject$nfProc 
-        if(is.null(nfProc)) {
-            stop(exprClassProcessingErrorMsg(code, 'In handling X$Y(): Symbols for X have not been set up.'), call. = FALSE)
-        }
+        
         if(a1$args[[1]]$name != 'cppPointerDereference') {
             insertExprClassLayer(a1, 1, 'cppPointerDereference') ## not annotated, but not needed
         }
@@ -1061,17 +1175,20 @@ sizeChainedCall <- function(code, symTab, typeEnv) { ## options include nfMethod
     ##sym <- symTab$getSymbolObject(a11$name, TRUE)
     
     if(isSymFun) {
-        nfMethodRCobj <- nfProc$getMethodInterfaces()[[methodName]] ##sym$nfProc$origMethods[[methodName]]
-        returnType <- nfProc$compileInfos[[methodName]]$returnSymbol
+        ##nfMethodRCobj <- nfProc$getMethodInterfaces()[[methodName]] ##sym$nfProc$origMethods[[methodName]]
+        returnSymbol <- nfProc$compileInfos[[methodName]]$returnSymbol
+        argSymTab <- nfProc$compileInfos[[methodName]]$origLocalSymTab
     } 
     if(isSymFunList) {
-        nfMethodRCobj <- getFunctionEnvVar(nf_getGeneratorFunction(symbolObject$baseClass), 'methodList')[[methodName]]
-        returnType <- nfMethodRCobj$returnType
+        ##nfMethodRCobj <- getFunctionEnvVar(nf_getGeneratorFunction(symbolObject$baseClass), 'methodList')[[methodName]]
+        ##returnSymbol <- nfMethodRCobj$returnType
+        returnSymbol <- nfProc$compileInfos[[methodName]]$returnSymbol
+        argSymTab <- nfProc$compileInfos[[methodName]]$origLocalSymTab
     }
-    if(!is.null(nfMethodRCobj)) {
+    if(!is.null(returnSymbol)) {
      ##   returnType <- nfMethodRCobj$returnType
-        argInfo <- nfMethodRCobj$argInfo
-        asserts <- generalFunSizeHandler(code, symTab, typeEnv, returnType, argInfo, chainedCall = TRUE)
+        ##argInfo <- nfMethodRCobj$argInfo
+        asserts <- generalFunSizeHandlerFromSymbols(code, symTab, typeEnv, returnSymbol, argSymTab, chainedCall = TRUE)
         return(asserts)
     }
     invisible(NULL)    
@@ -1145,15 +1262,18 @@ sizeValues <- function(code, symTab, typeEnv) {
     if(length(asserts)==0) NULL else asserts
 }
 
-sizeRCfunction <- function(code, symTab, typeEnv, nfmObj) {
+sizeRCfunction <- function(code, symTab, typeEnv, nfmObj, RCfunProc) {
     returnType <- nfmObj$returnType
     argInfo <- nfmObj$argInfo
     code$name <- nfmObj$uniqueName
-    asserts <- generalFunSizeHandler(code, symTab, typeEnv, returnType, argInfo)
+    returnSymbol <- RCfunProc$compileInfo$returnSymbol
+    argSymTab <- RCfunProc$compileInfo$origLocalSymTab
+##    asserts <- generalFunSizeHandler(code, symTab, typeEnv, returnType, argInfo)
+    asserts <- generalFunSizeHandlerFromSymbols(code, symTab, typeEnv, returnSymbol, argSymTab)
     return(asserts)
 }
 
-sizeNimbleFunction <- function(code, symTab, typeEnv) { ## This will handle other nimbleFunction run (operator()) calls or other methods of this nimbleFunction
+sizeNimbleFunction <- function(code, symTab, typeEnv) { ## This will handle other nimbleFunction run calls or other methods of this nimbleFunction
     sym <- symTab$getSymbolObject(code$name, TRUE)
     ok <- FALSE
     if(inherits(sym, 'symbolNimbleFunction')) {
@@ -1161,27 +1281,14 @@ sizeNimbleFunction <- function(code, symTab, typeEnv) { ## This will handle othe
         ## HANDLING OF myNF$run() HERE IS DEFUNCT.  ALL SHOULD GO THROUGH sizeChainedCall now (chainedCall(nfMethod(myNF,'run'), arg1, arg2).
     }
     if(inherits(sym, 'symbolMemberFunction')) {
-        returnType <- sym$nfMethodRCobj$returnType ## now nfMethodRCobj could be an interface
-        if(!(as.character(returnType[1]) %in% c('double', 'integer', 'character', 'logical', 'void'))){  
-          ## if we have a nl return type, find class name and match with nlGenerator in symTab
-          outClassName <- get('return', envir = typeEnv)$sizeExprs$nlProc$name
-          parentNLGenName <- lapply(symTab$parentST$symbols, function(x){
-            symType <- x$type
-            if(symType == 'Ronly'){
-              symClassName <- x[['nlProc']][['name']]
-              if(!is.null(symClassName) && symClassName == outClassName){
-                return(x$name)
-              }
-            }
-            return(NULL)
-          })
-          returnType[[1]] <- as.name(unlist(parentNLGenName))
-        }
-        argInfo <- sym$nfMethodRCobj$argInfo
+        memberRCfunProc <- sym$RCfunProc
+        returnSymbol <- memberRCfunProc$compileInfo$returnSymbol
+        argSymTab <- memberRCfunProc$compileInfo$origLocalSymTab
         ok <- TRUE
     }
     if(ok) {
-        asserts <- generalFunSizeHandler(code, symTab, typeEnv, returnType, argInfo)
+        asserts <- generalFunSizeHandlerFromSymbols(code, symTab, typeEnv, returnSymbol, argSymTab)
+        ##asserts <- generalFunSizeHandler(code, symTab, typeEnv, returnType, argInfo)
         return(asserts)
     }
     stop(exprClassProcessingErrorMsg(code, 'In sizeNimbleFunction: The function name is not known and is not a nimbleFunction or a member function.'), call. = FALSE)
@@ -1241,6 +1348,13 @@ sizeforceEigenize <- function(code, symTab, typeEnv) {
     toEigs <- lapply(code$args, function(x) {
         if(inherits(x, 'exprClass')) x$toEigenize else 'unknown'
     })
+    toLift <- lapply(code$args, function(x) {
+        if(inherits(x, 'exprClass')) (identical(x$type, 'logical') & !x$isName) else FALSE
+    })
+    for(i in seq_along(toLift)) {
+        if(toLift[[i]])
+            asserts <- c(asserts, sizeInsertIntermediate(code, i, symTab, typeEnv)) 
+    }
     code$toEigenize <- if(any( unlist(toEigs) %in% c('maybe', 'yes'))) 'yes' else 'no'
     code$type <- 'unknown'
     if(length(asserts) == 0) NULL else asserts
@@ -1444,7 +1558,7 @@ sizeAssignAfterRecursing <- function(code, symTab, typeEnv, NoEigenizeMap = FALS
         RHStype <- RHS$type
         RHSsizeExprs <- RHS$sizeExprs
     } else {
-        if(is.numeric(RHS)) {
+        if(is.numeric(RHS) | is.logical(RHS)) {
             RHSname = ''
             RHSnDim <- 0
             RHStype <- storage.mode(RHS)
@@ -2152,8 +2266,8 @@ isIntegerEquivalent <- function(code) {
 }
 
 sizeSeq <- function(code, symTab, typeEnv, recurse = TRUE) {
-    message('still need to handle -1L sequences')
-    message('check that arguments are scalars')
+    ##message('still need to handle -1L sequences')
+    ##message('check that arguments are scalars')
     asserts <- if(recurse) recurseSetSizes(code, symTab, typeEnv) else list()
     byProvided <- code$name == 'nimSeqBy' | code$name == 'nimSeqByLen'
     lengthProvided <- code$name == 'nimSeqLen' | code$name == 'nimSeqByLen'
@@ -2440,16 +2554,47 @@ sizeUnaryReduction <- function(code, symTab, typeEnv) {
 sizeReturn <- function(code, symTab, typeEnv) {
     if(length(code$args) > 1) stop(exprClassProcessingErrorMsg(code, 'return has argument length > 1.'), call. = FALSE)
     code$toEigenize <- 'no'
-    if(length(code$args) == 0) return(invisible(NULL))
-    
+    if(!exists('return', envir = typeEnv)) stop(exprClassProcessingErrorMsg(code, 'There was no returnType declaration and the default is missing.'), call. = FALSE)
+
+    if(length(code$args) == 0) {
+        if(!identical(typeEnv$return$type, 'void'))
+            stop(exprClassProcessingErrorMsg(code, 'return() with no argument can only be used with returnType(void()), which is the default if there is no returnType() statement.'), call. = FALSE)
+        return(invisible(NULL))
+    }
+    if(identical(typeEnv$return$type, 'void'))
+        stop(exprClassProcessingErrorMsg(code, 'returnType was declared void() (default) (or something invalid), which is not consistent with the object you are trying to return.'), call. = FALSE)
     asserts <- recurseSetSizes(code, symTab, typeEnv)
     if(inherits(code$args[[1]], 'exprClass')) {
-        if(!code$args[[1]]$isName) {
-##            if(code$args[[1]]$toEigenize == 'yes') {
-            if(anyNonScalar(code$args[[1]])) {
-                asserts <- c(asserts, sizeInsertIntermediate(code, 1, symTab, typeEnv, forceAssign = TRUE))
+
+        if(typeEnv$return$type == 'nimbleList' || code$args[[1]]$type == 'nimbleList') {
+            if(typeEnv$return$type != 'nimbleList') stop(exprClassProcessingErrorMsg(code, paste0('return() argument is a nimbleList but returnType() statement gives a different type')), call. = FALSE)
+            if(code$args[[1]]$type != 'nimbleList') stop(exprClassProcessingErrorMsg(code, paste0('returnType statement gives a nimbleList type but return() argument is not the right type')), call. = FALSE)
+            ## equivalent to symTab$getSymbolObject(code$args[[1]]$name)$nlProc, if it is a name
+            if(!identical(code$args[[1]]$sizeExprs$nlProc, typeEnv$return$sizeExprs$nlProc)) stop(exprClassProcessingErrorMsg(code, paste0('nimbleList given in return() argument does not match nimbleList type declared in returnType()')), call. = FALSE)
+        } else { ## check numeric types and nDim
+            fail <- FALSE
+            if(!identical(code$args[[1]]$type, typeEnv$return$type)) {
+                if(typeEnv$return$nDim > 0) { ## allow scalar casting of returns without error
+                    failMsg <- paste0('Type ', code$args[[1]]$type, ' of the return() argument does not match type ',  typeEnv$return$type, ' given in the returnType() statement (void is default).')
+                    fail <- TRUE
+                }
             }
-            ##            }
+            if(!isTRUE(all.equal(code$args[[1]]$nDim, typeEnv$return$nDim))) {
+                failMsg <- paste0( if(exists("failMsg", inherits = FALSE)) paste0(failMsg,' ') else character(),
+                                  paste0('Number of dimensions ', code$args[[1]]$nDim, ' of the return() argument does not match number ',  typeEnv$return$nDim, ' given in the returnType() statement.'))
+                fail <- TRUE
+            }
+            if(fail)
+                stop(exprClassProcessingErrorMsg(code, failMsg), call. = FALSE)
+        }
+        if(!code$args[[1]]$isName) {
+            liftArg <- FALSE
+            if(code$args[[1]]$toEigenize == 'yes')
+                liftArg <- TRUE
+            else if(anyNonScalar(code$args[[1]]))
+                liftArg <- TRUE
+            if(liftArg)
+                asserts <- c(asserts, sizeInsertIntermediate(code, 1, symTab, typeEnv, forceAssign = TRUE))
         }
     }
     invisible(asserts)
@@ -2487,10 +2632,10 @@ sizeMatrixMult <- function(code, symTab, typeEnv) {
 
     if(a1$nDim == 1 & a2$nDim == 1) {
         origSizeExprs <- a1$sizeExprs[[1]]
-        a1 <- insertExprClassLayer(code, 1, 'asRow', type = a1$type)
+        a1 <- insertExprClassLayer(code, 1, 'asRow', type = a1$type, nDim = 2)
         a1$sizeExprs <- c(list(1), origSizeExprs)
         origSizeExprs <- a2$sizeExprs[[1]]
-        a2 <- insertExprClassLayer(code, 2, 'asCol', type = a2$type)
+        a2 <- insertExprClassLayer(code, 2, 'asCol', type = a2$type, nDim = 2)
         a2$sizeExprs <- c(origSizeExprs, list(1))
     } else {
         if(a1$nDim == 1) {
@@ -2498,22 +2643,22 @@ sizeMatrixMult <- function(code, symTab, typeEnv) {
             origSizeExprs <- a1$sizeExprs[[1]]
             ## For first argument, default to asRow unless second argument has only one row, in which case make first asCol
             if(identical(a2$sizeExprs[[1]], 1)) {
-                a1 <- insertExprClassLayer(code, 1, 'asCol', type = a1$type)
+                a1 <- insertExprClassLayer(code, 1, 'asCol', type = a1$type, nDim = 2)
                 a1$sizeExprs <- c(origSizeExprs, list(1))
             }
             else {
-                a1 <- insertExprClassLayer(code, 1, 'asRow', type = a1$type)
+                a1 <- insertExprClassLayer(code, 1, 'asRow', type = a1$type, nDim = 2)
                 a1$sizeExprs <- c(list(1), origSizeExprs)
             }
         } else if(a2$nDim == 1) {
             origSizeExprs <- a2$sizeExprs[[1]]
             if(a1$nDim != 2) stop(exprClassProcessingErrorMsg(code, paste0('In sizeMatrixMult: Second arg has nDim = 1 and 1st arg has nDim = ', a1$nDim, '.')), call. = FALSE)
             if(identical(a1$sizeExprs[[2]], 1)) {
-                a2 <- insertExprClassLayer(code, 2, 'asRow', type = a2$type)
+                a2 <- insertExprClassLayer(code, 2, 'asRow', type = a2$type, nDim = 2)
                 a2$sizeExprs <- c(list(1), origSizeExprs)
            }
             else { 
-                a2 <- insertExprClassLayer(code, 2, 'asCol', type = a2$type)
+                a2 <- insertExprClassLayer(code, 2, 'asCol', type = a2$type, nDim = 2)
                 a2$sizeExprs <- c(origSizeExprs, list(1))
             }
         }
@@ -2649,6 +2794,7 @@ sizeBinaryCwise <- function(code, symTab, typeEnv) {
         a1nDim <- 0
         a1sizeExprs <- list()
         a1type <- storage.mode(a1)
+        a1toEigenize <- 'maybe'
     }
     if(inherits(a2, 'exprClass')) {
         if(a2$toEigenize == 'no') {
@@ -2660,11 +2806,13 @@ sizeBinaryCwise <- function(code, symTab, typeEnv) {
         a2nDim <- a2$nDim
         a2sizeExprs <- a2$sizeExprs
         a2type <- a2$type
+        a2toEigenize <- a2$toEigenize
     } else {
         a2DropNdim <- 0
         a2nDim <- 0
         a2sizeExprs <- list()
         a2type <- storage.mode(a2)
+        a2toEigenize <- 'maybe'
     }
     
     ## Choose the output type by type promotion
@@ -2672,7 +2820,14 @@ sizeBinaryCwise <- function(code, symTab, typeEnv) {
     if(length(a2type) == 0) {warning('Problem with type of arg2 in sizeBinaryCwise', call. = FALSE); browser()}
     code$type <- setReturnType(code$name, arithmeticOutputType(a1type, a2type))
 
-    code$toEigenize <- if(a1DropNdim == 0 & a2DropNdim == 0) 'maybe' else 'yes'
+    forceYesEigenize <- identical(a1toEigenize, 'yes') | identical(a2toEigenize, 'yes')
+    code$toEigenize <- if(a1DropNdim == 0 & a2DropNdim == 0)
+                           if(forceYesEigenize)
+                               'yes'
+                           else
+                               'maybe'
+                       else 'yes'
+    ##    code$toEigenize <- if(a1DropNdim == 0 & a2DropNdim == 0) 'maybe' else 'yes'
     
     ## Catch the case that there is at least one scalar-equivalent (all lengths == 1)
     if(a1DropNdim == 0 | a2DropNdim == 0) { 
@@ -2682,7 +2837,7 @@ sizeBinaryCwise <- function(code, symTab, typeEnv) {
             if(a2DropNdim == 0) { ##both are scalar-equiv
                 code$nDim <- max(a1nDim, a2nDim) ## use the larger nDims
                 code$sizeExprs <- rep(list(1), code$nDim) ## set sizeExprs to all 1
-                code$toEigenize <- 'maybe'
+                code$toEigenize <- if(forceYesEigenize) 'yes' else 'maybe'
             } else {
                 ## a2 is not scalar equiv, so take nDim and sizeExprs from it
                 code$nDim <- a2nDim
@@ -2802,6 +2957,8 @@ mvFirstArgCheckLists <- list(nimArr_rmnorm_chol = list(c(1, 2, 0), ## dimensiona
                                                        1, 'double'), ## 1 = argument from which to take answer size, double = answer type
                              nimArr_rwish_chol = list(c(2, 0, 0, 0), ## chol, df, prec_param, overwrite_inputs
                                  1, 'double'),
+                             nimArr_rinvwish_chol = list(c(2, 0, 0), ## chol, df, prec_param
+                                 1, 'double'),
                              nimArr_rmulti = list(c(0, 1), ## size, probs
                                  2, 'double'), ## We treat integer rv's as doubles
                              nimArr_rdirch = list(c(1), 1, 'double')) ## alpha
@@ -2812,7 +2969,7 @@ sizeRmultivarFirstArg <- function(code, symTab, typeEnv) {
     notOK <- FALSE
     checkList <- mvFirstArgCheckLists[[code$name]]
     if(!is.null(checkList)) {
-        if(length(code$args) < length(checkList[[1]])) stop(exprClassProcessingErrorMsg(code, 'In sizeRmultivarFirstArg: Not enough arguments provided.'), call. = FALSE)
+        if(length(code$args) < length(checkList[[1]])) stop(exprClassProcessingErrorMsg(code, 'Not enough arguments provided.'), call. = FALSE)
         for(i in seq_along(checkList[[1]])) {
             notOK <- if(inherits(code$args[[i]], 'exprClass')) code$args[[i]]$nDim != checkList[[1]][i] else notOK            
         }
@@ -2824,9 +2981,11 @@ sizeRmultivarFirstArg <- function(code, symTab, typeEnv) {
     }
 
     if(notOK) {
-        stop(exprClassProcessingErrorMsg(code, 'In sizeRmultivarFirstArg: Some argument(s) have the wrong dimension.'), call. = FALSE) 
+        stop(exprClassProcessingErrorMsg(code, 'Some argument(s) have the wrong dimension.'), call. = FALSE) 
     }
 
+    if(!inherits(code$args[[returnSizeArgID]], 'exprClass')) stop(exprClassProcessingErrorMsg(code, paste0('Expected ', nimDeparse(code$args[[returnSizeArgID]]) ,' to be an expression.')), call. = FALSE) 
+    
     code$type <- returnType
     code$nDim <- code$args[[returnSizeArgID]]$nDim
     code$toEigenize <- 'maybe'
@@ -2913,6 +3072,72 @@ generalFunSizeHandler <- function(code, symTab, typeEnv, returnType, args, chain
             return(asserts)
         }
         returnNDim <- if(returnSymbolBasic) returnType$nDim
+                      else if(length(returnType) > 1) as.numeric(returnType[[2]]) else 0
+                                                                
+                                        # returnSizeExprs <- if(returnTypeLabel == 'symbolNimbleList') symTab$getSymbolObject('return') else vector('list', returnNDim) ## This stays blank (NULLs), so if assigned as a RHS, the LHS will get default sizes
+        returnSizeExprs <- vector('list', returnNDim) ## This stays blank (NULLs), so if assigned as a RHS, the LHS will get default sizes
+        code$type <- returnTypeLabel
+        code$nDim <- returnNDim
+        code$sizeExprs <- returnSizeExprs
+        code$toEigenize <- if(code$nDim == 0) 'maybe' else 'no'
+        liftIfAmidExpression <- code$nDim > 0
+    }
+    
+    if(liftIfAmidExpression) {
+        if(!(code$caller$name %in% c('{','<-','<<-','='))) {
+            asserts <- c(asserts, sizeInsertIntermediate(code$caller, code$callerArgID, symTab, typeEnv))
+        } else
+            typeEnv$.ensureNimbleBlocks <- TRUE
+    }
+    return(asserts)
+}
+
+generalFunSizeHandlerFromSymbols <- function(code, symTab, typeEnv, returnSymbol, argSymTab, chainedCall = FALSE) {
+    ## are symbols guaranteed in order?  I think so
+    ## fix this:
+    useArgs <- unlist(lapply(argSymTab$symbols, function(x) {
+        if(!is.null(x[['type']]))
+            as.character(x$type) %in% c('double', 'integer', 'logical')
+        else
+            FALSE
+        }))
+    
+    if(chainedCall) useArgs <- c(FALSE, useArgs)
+    if(length(code$args) != length(useArgs)) {
+        stop(exprClassProcessingErrorMsg(code, 'In generalFunSizeHandler: Wrong number of arguments.'), call. = FALSE)
+    }
+    ## Note this is NOT checking the dimensions of each arg. useArgs just means it will recurse on that and lift or do as needed
+
+    asserts <- recurseSetSizes(code, symTab, typeEnv, useArgs)
+
+    ## lift any argument that is an expression
+    for(i in seq_along(code$args)) {
+        if(useArgs[i]) {
+            if(inherits(code$args[[i]], 'exprClass')) {
+                if(!code$args[[i]]$isName) {
+                    asserts <- c(asserts, sizeInsertIntermediate(code, i, symTab, typeEnv) )
+                }
+            }
+        }
+    }
+    if(inherits(returnSymbol, 'symbolNimbleList')) {
+        code$type <- 'nimbleList'
+        code$sizeExprs <- returnSymbol
+        code$toEigenize <- 'maybe'
+        code$nDim <- 0
+        liftIfAmidExpression <- TRUE
+    } else {
+        returnSymbolBasic <- inherits(returnSymbol, 'symbolBasic')
+        returnTypeLabel <- if(returnSymbolBasic) returnSymbol$type else
+                                                                 {
+                                                                     stop(exprClassProcessingErrorMsg(code, 'In generalFunSizeHandlerFromSymbols: Problem with return type.'), call. = FALSE)##as.character(returnType[[1]])
+                                                                 }
+        if(returnTypeLabel == 'void') {
+            code$type <- returnTypeLabel
+            code$toEigenize <- 'unknown'
+            return(asserts)
+        }
+        returnNDim <- if(returnSymbolBasic) returnSymbol$nDim
                       else if(length(returnType) > 1) as.numeric(returnType[[2]]) else 0
                                                                 
                                         # returnSizeExprs <- if(returnTypeLabel == 'symbolNimbleList') symTab$getSymbolObject('return') else vector('list', returnNDim) ## This stays blank (NULLs), so if assigned as a RHS, the LHS will get default sizes

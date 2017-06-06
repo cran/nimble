@@ -156,62 +156,71 @@ void SEXP_2_NimArr<1>(SEXP Sn, NimArr<1, int> &ans);
 
 template<int ndim>
 void SEXP_2_NimArr(SEXP Sn, NimArr<ndim, double> &ans) {
-  if(!(isNumeric(Sn) || isLogical(Sn))) PRINTF("Error: SEXP_2_NimArr<ndim> called for SEXP that is not a numeric or logica!\n");
+  NIM_ASSERT3(isNumeric(Sn) || isLogical(Sn),
+    "SEXP_2_NimArr<%d, double> called for SEXP that is not a numeric or logical: actual type %s\n",
+    ndim, type2str(TYPEOF(Sn)));
   vector<int> inputDims(getSEXPdims(Sn));
-  if(inputDims.size() != ndim) PRINTF("Error: Wrong number of input dimensions in SEXP_2_NimArr<ndim, double> called for SEXP that is not a numeric!\n");
-  // if(ans.size() != 0) PRINTF("Error: trying to reset a NimArr that was already sized\n");
+  NIM_ASSERT4(inputDims.size() == ndim,
+    "Wrong number of input dimensions in SEXP_2_NimArr<%d, double> called for SEXP that is not a numeric: expected %d, actual %d\n",
+    ndim, ndim, inputDims.size());
+  // NIM_ASSERT(ans.size() == 0, "trying to reset a NimArr that was already sized\n");
   ans.setSize(inputDims);
   int nn = LENGTH(Sn);
   if(isReal(Sn)) {
     std::copy(REAL(Sn), REAL(Sn) + nn, ans.getPtr() );
   } else {
-    if(isInteger(Sn) || isLogical(Sn)) {
-      int *iSn = isInteger(Sn) ? INTEGER(Sn) : LOGICAL(Sn);
-      std::copy(iSn, iSn + nn, ans.getPtr()); //v);
-    } else {
-      PRINTF("Error: could not handle input type to SEXP_2_NimArr\n");
-    }
+    NIM_ASSERT3(isInteger(Sn) || isLogical(Sn),
+      "could not handle input of type %s to SEXP_2_NimArr<%d, double>\n",
+      type2str(TYPEOF(Sn)), ndim);
+    int *iSn = isInteger(Sn) ? INTEGER(Sn) : LOGICAL(Sn);
+    std::copy(iSn, iSn + nn, ans.getPtr()); //v);
   }
 }
 
 // ACTUALLY THIS IS IDENTICAL CODE TO ABOVE, SO THEY COULD BE COMBINED WITHOUT TEMPLATE SPECIALIZATION
 template<int ndim>
 void SEXP_2_NimArr(SEXP Sn, NimArr<ndim, int> &ans) {
-  if(!(isNumeric(Sn) || isLogical(Sn))) PRINTF("Error: SEXP_2_NimArr<ndim> called for SEXP that is not a numeric or logica!\n");
+  NIM_ASSERT3(isNumeric(Sn) || isLogical(Sn),
+    "SEXP_2_NimArr<%d, int> called for SEXP that is not a numeric or logical: actual type %s\n",
+    ndim, type2str(TYPEOF(Sn)));
   vector<int> inputDims(getSEXPdims(Sn));
-  if(inputDims.size() != ndim) PRINTF("Error: Wrong number of input dimensions in SEXP_2_NimArr<ndim, double> called for SEXP that is not a numeric!\n");
-  // if(ans.size() != 0) PRINTF("Error: trying to reset a NimArr that was already sized\n");
+  NIM_ASSERT4(inputDims.size() == ndim,
+    "Wrong number of input dimensions in SEXP_2_NimArr<%d, int> called for SEXP that is not a numeric: expected %d, actual %d\n",
+    ndim, ndim, inputDims.size());
+  // NIM_ASSERT(ans.size() == 0, "trying to reset a NimArr that was already sized\n");
   ans.setSize(inputDims);
   int nn = LENGTH(Sn);
   if(isReal(Sn)) {
     std::copy(REAL(Sn), REAL(Sn) + nn, ans.getPtr() );
   } else {
-    if(isInteger(Sn) || isLogical(Sn)) {
-      int *iSn = isInteger(Sn) ? INTEGER(Sn) : LOGICAL(Sn);
-      std::copy(iSn, iSn + nn, ans.getPtr()); //v);
-    } else {
-      PRINTF("Error: could not handle input type to SEXP_2_NimArr\n");
-    }
+    NIM_ASSERT3(isInteger(Sn) || isLogical(Sn),
+      "could not handle input type %s to SEXP_2_NimArr<%d, int>\n",
+      type2str(TYPEOF(Sn)), ndim);
+    int *iSn = isInteger(Sn) ? INTEGER(Sn) : LOGICAL(Sn);
+    std::copy(iSn, iSn + nn, ans.getPtr()); //v);
   }
 }
 
 template<int ndim>
 void SEXP_2_NimArr(SEXP Sn, NimArr<ndim, bool> &ans) {
-  if(!(isNumeric(Sn) || isLogical(Sn))) PRINTF("Error: SEXP_2_NimArr<ndim> called for SEXP that is not a numeric or logica!\n");
+  NIM_ASSERT3(isNumeric(Sn) || isLogical(Sn),
+    "SEXP_2_NimArr<%d, bool> called for SEXP that is not a numeric or logical: actual type %s\n",
+    ndim, type2str(TYPEOF(Sn)));
   vector<int> inputDims(getSEXPdims(Sn));
-  if(inputDims.size() != ndim) PRINTF("Error: Wrong number of input dimensions in SEXP_2_NimArr<ndim, double> called for SEXP that is not a numeric!\n");
-  // if(ans.size() != 0) PRINTF("Error: trying to reset a NimArr that was already sized\n");
+  NIM_ASSERT4(inputDims.size() == ndim,
+    "Wrong number of input dimensions in SEXP_2_NimArr<%d, bool> called for SEXP that is not a numeric: expected %d, actual %d\n",
+    ndim, ndim, inputDims.size());
+  // NIM_ASSERT(ans.size() == 0, "trying to reset a NimArr that was already sized\n");
   ans.setSize(inputDims);
   int nn = LENGTH(Sn);
   if(isReal(Sn)) {
     std::copy(REAL(Sn), REAL(Sn) + nn, ans.getPtr() );
   } else {
-    if(isInteger(Sn) || isLogical(Sn)) {
-      int *iSn = isInteger(Sn) ? INTEGER(Sn) : LOGICAL(Sn);
-      std::copy(iSn, iSn + nn, ans.getPtr()); //v);
-    } else {
-      PRINTF("Error: could not handle input type to SEXP_2_NimArr\n");
-    }
+    NIM_ASSERT3(isInteger(Sn) || isLogical(Sn),
+      "could not handle input type %s to SEXP_2_NimArr<%d, bool>\n",
+      type2str(TYPEOF(Sn)), ndim);
+    int *iSn = isInteger(Sn) ? INTEGER(Sn) : LOGICAL(Sn);
+    std::copy(iSn, iSn + nn, ans.getPtr()); //v);
   }
 }
 
@@ -312,61 +321,5 @@ int length(vector<T> vec)
 
 void rankSample(NimArr<1, double>& weights, int& n, NimArr<1, int>& output);
 void rankSample(NimArr<1, double>& weights, int& n, NimArr<1, int>& output, bool& silent);
-
-
-/*	optim tools	*/
-
-
-//	 NEW CLASSES (may be classes for which nimble functions can inherit from to allow for easy 
-
-
-//This is a class that will be used to store outcome of a call to optim
-//By giving the optim functions pointers to these elements, 
-//there is actually no need to "unpack" the results
-//The following two classes COULD be a nimbleFunction
-class OptimAns{
-	public: 
-	NimArr<1, double> par;
-	double Fmin;
-	int fail, fncount;
-	OptimAns(int n){
-		par = NimArr<1, double> (n);
-	};
-};		
-
-
-//This is a class that will be used to store inputs to various optims
-//Will further specialize classes for each version of optim!
-
-
-class OptimControl{
-	public:
-	int optimType, maxit, trace;
-	//Choices of optimType: 1 = Nelder Mead, 2 = BFG, 3 = BFG with Box Constraints, 4 = Conjugate Gradient, 5 = Simulated Annealing
-};		
-					
-					
-//	This is a specialized control specifically for Nelder Mead optimizer						
-class NM_OptimControl : public OptimControl{
-	public:
-	double alpha, beta, gamma, abstol, intol;
-	NM_OptimControl(double ialpha, double ibeta, double igamma, double iabstol, double iintol, int imaxit, int itrace){
-		alpha = ialpha; beta = ibeta; gamma = igamma; abstol = iabstol; intol = iintol;
-		maxit = imaxit; trace = itrace;
-		optimType = 1;
-	};
-};
-
-
-void bareBonesOptim(NimArr<1, double> initPar, optimfn objFxn, void* nfPtr, int nargs,  ...);
-
-void nimble_optim(void* nimFun, OptimControl* control, OptimAns* ans,
-				 	NimArr<1, double> par, void* otherArgs,
-				 	optimfn objFxn);
-
-void nimble_optim_withVarArgs(void* nimFun, OptimControl* control, OptimAns* ans,
-				 	NimArr<1, double> par, optimfn objFxn,
-				 	int numOtherArgs, ...);
-					
 
 #endif
