@@ -32,7 +32,7 @@ distributionsInputList <- list(
     dcat    = list(BUGSdist = 'dcat(prob)',
                    Rdist    = 'dcat(prob)',
                    types    = c('prob = double(1)'),
-                   range    = c(1, Inf),
+                   range    = c(1, Inf), 
                    discrete = TRUE),
     
     ## construct used to enforce constraints - 0/1 random variable depending on if cond is TRUE
@@ -170,6 +170,18 @@ distributionsInputList <- list(
     ####################################
     
     
+    dcar_normal = list(BUGSdist = 'dcar_normal(adj, weights, num, tau, c, zero_mean)',
+                       Rdist    = c('dcar_normal(adj, weights,           num, tau, c,                                zero_mean = 0)',
+                                    'dcar_normal(adj, weights,           num, tau, c = CAR_calcNumIslands(adj, num), zero_mean    )',
+                                    'dcar_normal(adj, weights,           num, tau, c = CAR_calcNumIslands(adj, num), zero_mean = 0)',
+                                    'dcar_normal(adj, weights = adj/adj, num, tau, c,                                zero_mean    )',
+                                    'dcar_normal(adj, weights = adj/adj, num, tau, c,                                zero_mean = 0)',
+                                    'dcar_normal(adj, weights = adj/adj, num, tau, c = CAR_calcNumIslands(adj, num), zero_mean    )',
+                                    'dcar_normal(adj, weights = adj/adj, num, tau, c = CAR_calcNumIslands(adj, num), zero_mean = 0)'),
+                       types    = c('value = double(1)', 'adj = double(1)', 'weights = double(1)', 'num = double(1)', 'tau = double(0)', 'c = double(0)', 'zero_mean = double(0)'),
+                       mixedSizes = TRUE,
+                       alias    = 'car.normal'),
+
     ddirch  = list(BUGSdist = 'ddirch(alpha)',
                    Rdist    = 'ddirch(alpha)',
                    types    = c('value = double(1)', 'alpha = double(1)'),

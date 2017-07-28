@@ -1,6 +1,13 @@
 source(system.file(file.path('tests', 'test_utils.R'), package = 'nimble'))
 context('testing return() type error trapping')
 
+RwarnLevel <- options('warn')$warn
+options(warn = -1)
+nimbleVerboseSetting <- nimbleOptions('verbose')
+nimbleOptions(verbose = FALSE)
+nimbleVerboseErrorsSetting <- nimbleOptions('verboseErrors')
+nimbleOptions(verboseErrors = FALSE)
+
 ## We can use upcoming expect_compiles in the future,
 ## but for now I'm doing it more crudely
 
@@ -10,8 +17,7 @@ test_that('return type error caught', {
             return(x + 1)
             returnType(integer(1))
         })
-    cfoo <- try(compileNimble(foo))
-    expect_failure(expect_identical(class(cfoo), "function"))
+    expect_error(compileNimble(foo))
 })
 
 test_that('return nDim error caught', {
@@ -20,8 +26,7 @@ test_that('return nDim error caught', {
             return(x + 1)
             returnType(double(2))
         })
-    cfoo <- try(compileNimble(foo))
-    expect_failure(expect_identical(class(cfoo), "function"))
+    expect_error(compileNimble(foo))
 })
 
 test_that('return type and nDim error caught', {
@@ -30,8 +35,7 @@ test_that('return type and nDim error caught', {
             return(x + 1)
             returnType(integer())
         })
-    cfoo <- try(compileNimble(foo))
-    expect_failure(expect_identical(class(cfoo), "function"))
+    expect_error(compileNimble(foo))
 })
 
 test_that('nimbleList return type error caught', {
@@ -46,8 +50,7 @@ test_that('nimbleList return type error caught', {
             return(l1)
         }
     )    
-    Cnf1 <- try(compileNimble(nf1))
-    expect_failure(expect_identical(class(Cnf1), "function"))
+    expect_error(compileNimble(nf1))
 })
 
 test_that('void() return passes return type error trapping', {
@@ -55,8 +58,8 @@ test_that('void() return passes return type error trapping', {
         run = function(x = double(1)) {
             return()
         })
-    cfoo <- try(compileNimble(foo))
-    expect_success(expect_identical(class(cfoo), "function"))
+    cfoo <- compileNimble(foo)
+    expect_identical(class(cfoo), "function")
 })
 
 test_that('return type error caught when non-void object is returned', {
@@ -65,6 +68,9 @@ test_that('return type error caught when non-void object is returned', {
             return(x)
             returnType(void())
         })
-    cfoo <- try(compileNimble(foo))
-    expect_failure(expect_identical(class(cfoo), "function"))
+    expect_error(compileNimble(foo))
 })
+
+options(warn = RwarnLevel)
+nimbleOptions(verbose = nimbleVerboseSetting)
+nimbleOptions(verboseErrors = nimbleVerboseErrorsSetting)

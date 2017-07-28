@@ -7,7 +7,6 @@ ifndef R_SHARE_DIR
  R_SHARE_DIR=$(R_HOME)/share
 endif
 
-# Don't have to succeed in including this if we are calling cleanup in the nimble package directory.
 -include $(R_HOME)/etc$(R_ARCH)/Makeconf
 include ./Makevars
 

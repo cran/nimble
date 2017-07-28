@@ -10,7 +10,7 @@ using std::vector;
 using std::string;
 
 /* NODETYPE labels the type of node, regardless of where it is in the graph */
-enum NODETYPE {UNKNOWNTYPE, STOCH, DETERM, RHSONLY, LHSINFERRED};
+enum NODETYPE {UNKNOWNTYPE, STOCH, DETERM, RHSONLY, LHSINFERRED, UNKNOWNINDEX};
 /* NODEROLE labels how a node fits in the graph */
 enum NODEROLE {UNKNOWNROLE, TOP, LATENT, END, DATA};
 
@@ -56,11 +56,11 @@ public:
 void nimbleGraphFinalizer(SEXP SgraphExtPtr);
 
 extern "C" {
-  SEXP setGraph(SEXP SedgesFrom, SEXP SedgesTo, SEXP SedgesFrom2ParentExprIDs, SEXP SnodeFunctionIDs, SEXP Stypes, SEXP Snames, SEXP SnumNodes);
-  SEXP anyStochDependencies(SEXP SextPtr);
-  SEXP anyStochParents(SEXP SextPtr);
-  SEXP getDependencies(SEXP SextPtr, SEXP Snodes, SEXP Somit, SEXP Sdownstream);
-  SEXP getDependencyPathCountOneNode(SEXP SgraphExtPtr, SEXP Snode);
+  SEXP C_setGraph(SEXP SedgesFrom, SEXP SedgesTo, SEXP SedgesFrom2ParentExprIDs, SEXP SnodeFunctionIDs, SEXP Stypes, SEXP Snames, SEXP SnumNodes);
+  SEXP C_anyStochDependencies(SEXP SextPtr);
+  SEXP C_anyStochParents(SEXP SextPtr);
+  SEXP C_getDependencies(SEXP SextPtr, SEXP Snodes, SEXP Somit, SEXP Sdownstream);
+  SEXP C_getDependencyPathCountOneNode(SEXP SgraphExtPtr, SEXP Snode);
 }
 
 #endif
