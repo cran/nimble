@@ -19,7 +19,8 @@ RCfunctionDef <- setRefClass('RCfunctionDef',
                                                        '<math.h>',
                                                        nimbleIncludeFile("EigenTypedefs.h"),
                                                        nimbleIncludeFile("Utils.h"),
-                                                       nimbleIncludeFile("accessorClasses.h"))
+                                                       nimbleIncludeFile("accessorClasses.h"),
+                                                       if(nimbleOptions('experimentalUseTensorflow')) nimbleIncludeFile("tensorflow.h") else character())
                                      CPPusings <<- c(CPPusings) 
                                      callSuper(...)
                                  },
@@ -127,7 +128,9 @@ RCfunctionDef <- setRefClass('RCfunctionDef',
                                    argNamesCall = argNames
                                    for(i in seq_along(argNamesCall) ){
                                      if(argsCode[i] != '')
-                                       argNamesCall[i] = paste(argNames[i], " = ", as.character(argsCode[[i]]) )
+                                         argNamesCall[i] = paste(argNames[i], " = ", deparse(argsCode[[i]]) )
+                                     ## deparse instead of as.character is needed in the above line if there is a negative default
+                                     ## because it will be parsed as a unary - operator with the number as an argument
                                    }
                                    if(includeDotSelfAsArg) argNamesCall <- c(argNamesCall, includeDotSelf)
                                    if(inherits(RCfunProc$compileInfo$returnSymbol, 'symbolNimbleList')){

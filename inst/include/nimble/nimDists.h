@@ -1,3 +1,24 @@
+/*
+ * NIMBLE: an R package for programming with BUGS models.
+ * Copyright (C) 2014-2017 Perry de Valpine, Christopher Paciorek,
+ * Daniel Turek, Clifford Anderson-Bergman, Nick Michaud, Fritz Obermeyer,
+ * Duncan Temple Lang.
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, a copy is available at
+ * https://www.R-project.org/Licenses/
+ */
+
 #ifndef __NIM_DISTS
 #define __NIM_DISTS
 
@@ -39,5 +60,8 @@ int nimArr_rinterval(double t, double c);
 
 double nimArr_dcar_normal(NimArr<1, double> &x, NimArr<1, double> &adj, NimArr<1, double> &wgts, NimArr<1, double> &num, double tau, int c, int zero_mean, int give_log);
 void nimArr_rcar_normal(NimArr<1, double> &ans, NimArr<1, double> &adj, NimArr<1, double> &wgts, NimArr<1, double> &num, double tau, int c, int zero_mean);
+
+double nimArr_dcar_proper(NimArr<1, double> &x, NimArr<1, double> &mu, NimArr<1, double> &C, NimArr<1, double> &adj, NimArr<1, double> &num, NimArr<1, double> &M, double tau, double gamma, NimArr<1, double> &evs, int give_log);
+void nimArr_rcar_proper(NimArr<1, double> &ans, NimArr<1, double> &mu, NimArr<1, double> &C, NimArr<1, double> &adj, NimArr<1, double> &num, NimArr<1, double> &M, double tau, double gamma, NimArr<1, double> &evs);
 
 #endif

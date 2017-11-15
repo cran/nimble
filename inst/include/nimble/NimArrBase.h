@@ -1,3 +1,24 @@
+/*
+ * NIMBLE: an R package for programming with BUGS models.
+ * Copyright (C) 2014-2017 Perry de Valpine, Christopher Paciorek,
+ * Daniel Turek, Clifford Anderson-Bergman, Nick Michaud, Fritz Obermeyer,
+ * Duncan Temple Lang.
+ * 
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, a copy is available at
+ * https://www.R-project.org/Licenses/
+ */
+
 #ifndef __NIMARRBASE
 #define __NIMARRBASE
 
@@ -130,6 +151,8 @@ class NimArrBase : public NimArrType {
         if (fillZeros) std::fill(new_v, new_v + l, static_cast<T>(0));
       }
       nimble_free(v);
+    } else {
+      if (fillZeros) std::fill(new_v, new_v + l, static_cast<T>(0));
     }
     NAlength = l;
     v = new_v;
@@ -158,13 +181,14 @@ class NimArrBase : public NimArrType {
   virtual ~NimArrBase() {
     if (own_v) nimble_free(v);
   }
-  // Do we ever use this case?
+  // Base class copy constructor:
+  // This will be used by derived class copy constructors,
+  // which will be called when a VecNimArr resizes its vector of NimArr<>s.
   NimArrBase(const NimArrBase<T> &other)
-      :  // own_v isn't a map but we'll only set to true when giving it values.
-        own_v(false),
-        offset(0),
-        boolMap(false),
-        NAlength(other.size()) {
+    :   own_v(false), // this may get set to true in a derived copy constructor
+    offset(0),
+    boolMap(false),
+    NAlength(other.size()) {
     std::memcpy(NAdims, other.dim(), other.numDims() * sizeof(int));
     myType = other.getNimType();
   }

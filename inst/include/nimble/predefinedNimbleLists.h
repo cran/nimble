@@ -38,6 +38,7 @@ class OptimResultNimbleList : public NamedObjects, public pointedToBase {
   SEXP copyToSEXP();
   void createNewSEXP();
   void resetFlags();
+  void copyFromRobject(SEXP Robject);
   OptimResultNimbleList();
 };
 
@@ -74,6 +75,7 @@ class OptimControlNimbleList : public NamedObjects, public pointedToBase {
   SEXP copyToSEXP();
   void createNewSEXP();
   void resetFlags();
+  void copyFromRobject(SEXP Robject);
   OptimControlNimbleList();
 };
 
@@ -97,6 +99,7 @@ class NIMBLE_ADCLASS : public NamedObjects, public pointedToBase {
   SEXP copyToSEXP();
   void createNewSEXP();
   void resetFlags();
+  void copyFromRobject(SEXP Robject);
   NIMBLE_ADCLASS();
 };
 
