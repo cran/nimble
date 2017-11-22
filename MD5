@@ -1,8 +1,8 @@
-2aaf431b695c0ea159b8997e940c8603 *DESCRIPTION
-0fa6e8c6f8ed1b2e7d2efd62186bbe37 *INSTALL
+882cd56c448221758d30679b7c3c478a *DESCRIPTION
+1948d3553555ebea0a223c1e676a9216 *INSTALL
 27d32b16c2649b91dda7c849d7630686 *LICENSE
 df3ea986864a2662d77dd7bad0be7045 *NAMESPACE
-104d129c73f9901dbb81fdb3be8403ed *NEWS
+9eb5688b6491ecb6e8dcc65e4a1236cb *NEWS
 126516db33e528d9bf0589b8a8b233a7 *R/BUGS_BUGSdecl.R
 f7b0b60af7ca3426d65c8e4da6dfcb99 *R/BUGS_contexts.R
 089e800334c4f389187b31271fc45b00 *R/BUGS_getDependencies.R
@@ -23,7 +23,7 @@ f068c2da9edd9025e2d27c35c734e4df *R/MCMC_build.R
 d69f705fe8d5be2df19aaece2b0c6b0d *R/MCMC_configuration.R
 edb682e802f7f8df56b5e05a461d08c1 *R/MCMC_conjugacy.R
 3668f82638831ab49186efd72a562360 *R/MCMC_run.R
-1c5f70f32d774ae895ad79026a77d2f1 *R/MCMC_samplers.R
+71dea4eda947cdcc6773b98b3e8797a1 *R/MCMC_samplers.R
 2e64c400ae19095a6433b744ed5ab58d *R/MCMC_suite.R
 e2bbddef073180c9b35d3982847b9131 *R/MCMC_utils.R
 195972905e118ff1ac23e462870e5c74 *R/NF_utils.R
@@ -86,7 +86,7 @@ b85ff7e468ebc717edc3527a6b86d1bd *R/nimbleFunction_nodeFunctionNew.R
 a1755fc14c17e1b26351c49151dd82ca *R/nimbleFunction_util.R
 7c920b542fe1e2bd9fa71ca195cb4d57 *R/nimbleList_core.R
 8fa3b22eaa0145877d08144208ec7b86 *R/nimbleProject.R
-ea9c512ae58df65c7753f4a37bec50c8 *R/options.R
+46ef989040bec348ee79039ff8703cb8 *R/options.R
 19b3c37be2f7fb92103dec4711e36c6e *R/registration.R
 57b2a9375be5d994b4e4c584a64fdad2 *R/setNimbleInternalFunctions.R
 c145e59c86ebf7ea1da827a21c95dc9d *R/types_modelValues.R
@@ -783,10 +783,8 @@ bdb69e7d3a67cceac3e9d529b3fe9bb8 *inst/include/nimble/smartPtrs.h
 2c36fa383006a8ba6289c187eacad5f0 *inst/include/nimble/tensorflow.h
 a218920bc4c83e4e538cb7050c2b0dc5 *inst/include/tensorflow/METADATA
 551c316bcd5aea399f9e29db9c45f309 *inst/include/tensorflow/c/c_api.h
-959b6a31f35b880950ef3b220dc45253 *inst/make/Makevars
 fc9d92aefee7e4d3ef32e6ac9ae70433 *inst/make/Makevars.in
 5f8198914efdfc2812d2c9077e8873ee *inst/make/Makevars.win.in
-ec238a119030796c28cff72df76a30c3 *inst/make/Makevars_lib
 e87e299d0a1558c9f280826e0ea56120 *inst/make/Makevars_lib.in
 bcd3b3157560e4144b3f007c66b855ab *inst/tests/distributionsTestLog_Correct.Rout
 14995ea4d73a5719f03220164401b1ef *inst/tests/dynamicIndexingTestLists.R
@@ -944,7 +942,7 @@ cf007aba32b4e31432797fbc701aed3a *man/nimble-R-functions.Rd
 1ce70733f613118cf2d730d3d790ed9a *man/nimbleFunctionList-class.Rd
 1767bdf55881aa833d83c5478e6efba2 *man/nimbleFunctionVirtual.Rd
 8ef27c9cdbeaae4b7b722d09fca86d1a *man/nimbleList.Rd
-3dd42ac0b8a50932e3c23f8216628080 *man/nimbleMCMC.Rd
+5bec7a0df2c687a18c01d58ea172a32b *man/nimbleMCMC.Rd
 b9bb3917c24a8abd8e2ba4eb6197b32e *man/nimbleModel.Rd
 827120a515dd064d3aa85b8591fa058b *man/nimbleOptions.Rd
 554af849dabb8aa72c1d13917e0b1ada *man/nimbleRcall.Rd
@@ -960,8 +958,8 @@ cc71e1afd9fc79b89c592c5f138f006c *man/registerDistributions.Rd
 46f402c3d39d32fd4b123b8088c8cd5a *man/reshape_comparison_results.Rd
 084a80d185e24b74a9c401a23bae5871 *man/resize.Rd
 b5987a2a3fc6503cf8d0804724257144 *man/run.time.Rd
-1f677ce417db9953996c920f88bae88b *man/runCrossValidate.Rd
-1cb83c6801719018e1e945930f271125 *man/runMCMC.Rd
+81d4f50a5aef78a1a479a67af8a69f85 *man/runCrossValidate.Rd
+966d0c2b35aef1e9366eb3b7085105a2 *man/runMCMC.Rd
 b107eab6392e201596e979e174f05bf1 *man/samplerAssignmentRules-class.Rd
 2a51e23d598e9c84e48b0414ef74986b *man/samplers.Rd
 96a8203241ce6eaacaec9fbe85cb867d *man/setAndCalculate.Rd
@@ -977,8 +975,8 @@ af78f07e8f89dc47328be225e02a5f7c *man/singleVarAccessClass-class.Rd
 85ce258b7beab375e087c217073a9ff8 *man/updateMCMCcomparisonWithHighOrderESS.Rd
 133877d8be5c0ebad3a193ded130913f *man/valueInCompiledNimbleFunction.Rd
 cbcb969dcea11a9196f34f798912d8ec *man/values.Rd
-69f36b1ca1e9c83cf0951dd452e8cf95 *man/withNimbleOptions.Rd
+20b984e59d5cc0769a61e4045318eb91 *man/withNimbleOptions.Rd
 d41d8cd98f00b204e9800998ecf8427e *src/DO_NOT_PUT_CODE_HERE_DO_IN_INST_CPPCODE
-12ba3e3bf3b09bd7a4a78e7dcb56dbfa *src/Makevars.in
+b3a60b003062692cfd30dd861340080a *src/Makevars.in
 ffca1d763209c31aa9a3ff2ea8546015 *src/Makevars.win
 7fcedf998b1e7cbf2162f65374e00f44 *src/nimble.cpp

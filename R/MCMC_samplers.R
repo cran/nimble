@@ -203,7 +203,7 @@ sampler_RW <- nimbleFunction(
             ##scaleHistory  <<- scaleHistory * 0    ## scaleHistory
             gamma1 <<- 0
         }
-    )#, where = getLoadingNamespace()
+    ), where = getLoadingNamespace()
 )
 
 
