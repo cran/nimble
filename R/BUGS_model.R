@@ -813,11 +813,12 @@ inits: A named list.  The names of list elements must correspond to model variab
                                       origInits <<- inits
 
                                       for(i in seq_along(inits)) {
-                                          dataVals <- .self$isData(names(inits)[[i]])
+                                          ##dataVals <- .self$isData(names(inits)[[i]])
+                                          dataVals <- .self$isDataEnv[[names(inits)[[i]] ]]
                                           if(any(dataVals)) {
                                               .self[[names(inits)[i]]][!dataVals] <- inits[[i]][!dataVals]
                                               if(any(!is.na(inits[[i]][dataVals])))
-                                                  warning("Ignoring values in inits for data nodes: ", names(inits)[[i]], ".")
+                                                  warning("Ignoring non-NA values in inits for data nodes: ", names(inits)[[i]], ".", call. = FALSE)
                                           } else  .self[[names(inits)[i]]] <- inits[[i]]
                                       }
                                   },
@@ -831,7 +832,7 @@ inits: A named list.  The names of list elements must correspond to model variab
                                   ##    nodeVector <- expandNodeNames(nodeVector)
                                   ##    nimble:::conjugacyRelationshipsObject$checkConjugacy(.self, nodeVector)
                                   ##},
-                                  checkConjugacy = function(nodeVector) {
+                                  checkConjugacy = function(nodeVector, restrictLink = NULL) {
                                       '
 Determines whether or not the input nodes appear in conjugate relationships
 
@@ -843,7 +844,7 @@ Details: The return value is a named list, with an element corresponding to each
 '
                                       if(missing(nodeVector)) nodeVector <- getNodeNames(stochOnly=TRUE, includeData=FALSE)
                                       nodeIDs <- expandNodeNames(nodeVector, returnType = 'ids')
-                                      nimble:::conjugacyRelationshipsObject$checkConjugacy(.self, nodeIDs)
+                                      nimble:::conjugacyRelationshipsObject$checkConjugacy(.self, nodeIDs, restrictLink = restrictLink)
                                   },
                                   checkBasics = function() {
                                       '
@@ -1176,8 +1177,16 @@ RmodelBaseClass <- setRefClass("RmodelBaseClass",
                                              parentsSizeAndDims <- nimble:::makeSizeAndDimList(LHS, parents, BUGSdecl$unrolledIndicesMatrix)
                                              parentsSizeAndDims <- nimble:::makeSizeAndDimList(RHS, parents, BUGSdecl$unrolledIndicesMatrix,
                                                                                                allSizeAndDimList = parentsSizeAndDims)
-                                           }
-                                           else parentsSizeAndDims <- list()
+                                           } else parentsSizeAndDims <- list()
+
+                                           if(nimbleOptions()$allowDynamicIndexing) {  ## need dim for node for generating NaN with invalid dynamic indexes
+                                               nodeSizeAndDims <- nimble:::makeSizeAndDimList(LHS, deparse(BUGSdecl$targetVarExpr),
+                                                                                              BUGSdecl$unrolledIndicesMatrix)
+                                               nodeDim <- nodeSizeAndDims[[deparse(BUGSdecl$targetVarExpr)]][[1]]$lengths
+                                               nodeDim <- nodeDim[nodeDim != 1] ## will be NULL if scalar
+                                               if(!length(nodeDim)) nodeDim <- NULL
+                                           } else nodeDim <- NULL
+
                                            altParams <- BUGSdecl$altParamExprs
                                            altParams <- lapply(altParams, nimble:::insertSingleIndexBrackets, modelDef$varInfo)
                                            bounds <- BUGSdecl$boundExprs
@@ -1199,7 +1208,8 @@ RmodelBaseClass <- setRefClass("RmodelBaseClass",
                                            ## make a unique name
                                            thisNodeGeneratorName <- paste0(nimble:::Rname2CppName(BUGSdecl$targetVarName), '_L', BUGSdecl$sourceLineNumber, '_', nimble:::nimbleUniqueID())
                                            ## create the nimbleFunction generator (i.e. unspecialized nimbleFunction)
-                                           nfGenerator <- nimble:::nodeFunctionNew(LHS=LHS, RHS=RHS, name = thisNodeGeneratorName, altParams=altParams, bounds=bounds, parentsSizeAndDims = parentsSizeAndDims, logProbNodeExpr=logProbNodeExpr, type=type, setupOutputExprs=setupOutputExprs, dynamicIndexInfo = dynamicIndexInfo, evaluate=TRUE, where = where)
+
+                                           nfGenerator <- nimble:::nodeFunctionNew(LHS=LHS, RHS=RHS, name = thisNodeGeneratorName, altParams=altParams, bounds=bounds, parentsSizeAndDims = parentsSizeAndDims, logProbNodeExpr=logProbNodeExpr, type=type, setupOutputExprs=setupOutputExprs, dynamicIndexInfo = dynamicIndexInfo, nodeDim = nodeDim, evaluate=TRUE, where = where)
                                            nodeGenerators[[i]] <<- nfGenerator
                                            names(nodeGenerators)[i] <<- thisNodeGeneratorName
                                            nodeFunctionGeneratorNames[i] <<- thisNodeGeneratorName
