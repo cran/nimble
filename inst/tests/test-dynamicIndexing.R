@@ -306,8 +306,8 @@ test_that("MCMC with invalid indexes produce warning, but runs", {
 models <- c('hearts')
 
 ### test BUGS examples - models and MCMC
-sapply(models, testBUGSmodel, useInits = TRUE)
-sapply(models, test_mcmc, numItsC = 1000)
+out <- sapply(models, testBUGSmodel, useInits = TRUE)
+out <- sapply(models, test_mcmc, numItsC = 1000)
 
 ## beta0C is beta0 in inits file
 system.in.dir(paste("sed 's/beta0/beta0C/g' cervix-inits.R > ", file.path(tempdir(), "cervix-inits.R")), dir = system.file('classic-bugs','vol2','cervix', package = 'nimble'))
@@ -352,8 +352,8 @@ test_that('basic mixture model with conjugacy', {
     d <- 4
     set.seed(2)
     mns <- c(-.9, .2, 1.6, -1.1)
-    p <- c(.45, .14, .05, .36)
-    sds <- c(.3, .5, .3, .1)
+    p <- c(.4, .14, .1, .36)
+    sds <- c(.2, .4, .2, .1)
     k <- sample(1:d, n, replace = TRUE, prob = p)
     y <- rnorm(n, mns[k], sds[k])
     code <- nimbleCode({
@@ -386,13 +386,13 @@ test_that('basic mixture model with conjugacy', {
                                          "p[2]" = p[3],
                                          "p[3]" = p[1],
                                          "p[4]" = p[2])),
-              resultsTolerance = list(mean = list("mu[1]" = .1,
-                                                  "mu[2]" = .5,
-                                                  "mu[3]" = .1,
-                                                  "mu[4]" = .3,
-                                                  "p[1]" = .02,
-                                                  "p[2]" = .07,
-                                                  "p[3]" = .05,
+              resultsTolerance = list(mean = list("mu[1]" = .05,
+                                                  "mu[2]" = .02,
+                                                  "mu[3]" = .05,
+                                                  "mu[4]" = .05,
+                                                  "p[1]" = .05,
+                                                  "p[2]" = .02,
+                                                  "p[3]" = .1,
                                                   "p[4]" = .02)),
               avoidNestedTest = TRUE)
 
@@ -441,6 +441,46 @@ test_that('basic mixture model without conjugacy', {
                                                   "p[4]" = .05)),
               avoidNestedTest=TRUE)
 })
+
+
+test_that('range checking with dynamic indexing', {
+    code <- nimbleCode({
+        for(i in 3:4) {
+            z[i-1] ~ dcat(alpha[z[i-2], 1:2])
+        }
+    }
+    )
+    
+    m <- nimbleModel(code, inits = list(alpha = matrix(c(0.9,.1,0.1,.9), 2),
+                                        z = c(1,2,1)), calculate = FALSE)
+    ## will give error if issue #790 is not fixed:
+    expect_silent(output <- m$calculate())
+
+    code <- nimbleCode({
+        for(i in 1:2) {
+            z[i+1] ~ dcat(alpha[z[i], 1:2])
+        }
+    }
+    )
+    
+    m <- nimbleModel(code, inits = list(alpha = matrix(c(0.9,.1,0.1,.9), 2),
+                                        z = c(1,2,1)), calculate = FALSE)
+    expect_silent(output <- m$calculate())
+    
+    code <- nimbleCode({
+        for(i in 2:3) {
+            z[i] ~ dcat(alpha[z[i-1], 1:2])
+        }
+    }
+    )
+    
+    
+    m <- nimbleModel(code, inits = list(alpha = matrix(c(0.9,.1,0.1,.9), 2),
+                                        z = c(1,2,1)), calculate = FALSE)
+    expect_silent(output <- m$calculate())
+    
+})
+
 
 if(FALSE) {
     ## Heisenbug here - running manually vs. via testthat causes different ordering of mixture components even though we are setting seed before each use of RNG; this test _does_ pass when run manually.
