@@ -1,5 +1,5 @@
-184dcc7c69ec47563047f45addbb951e *DESCRIPTION
-c4b3b5be52fddaad69cf972fb1f48f8d *INSTALL
+c56778b52812475085b6d3562a0f16f6 *DESCRIPTION
+c047d8297bd581705f90dfc157735662 *INSTALL
 d52ec4c33c61b35a8acbf0b93ff2f113 *LICENSE
 515e434661154dfb35d525ce41f66553 *NAMESPACE
 7a90a34dc71d90ea0d1b291a9c2343de *R/BNP_distributions.R
@@ -75,7 +75,7 @@ d7e9a3c67322698dccdb241a03b456f7 *R/genCpp_liftMaps.R
 a8c3bc122887f02940aa247d15775f89 *R/genCpp_processSpecificCalls.R
 e45a97918f01ffb4250b8c0cdcb47677 *R/genCpp_sizeProcessing.R
 2d7a025a9f950fcec782e96bb8aa4081 *R/genCpp_toEigenize.R
-40827c9c6217ec77b1c8260eec7eefb5 *R/initializeModel.R
+3f759258f30a25bac27be75d0b537f27 *R/initializeModel.R
 f2c712517ec2b08b738fc236358eb23d *R/makevars.R
 97bd9b949ca4f339ee2c0c25d41cb8ea *R/miscFunctions.R
 c6a55ddf73c34dfbd848c73d239b40f7 *R/nimble-package.r
@@ -120,17 +120,17 @@ ba7b5e33f6d62f131f6f171a479ec471 *inst/CppCode/ModelClassUtils.cpp
 163e426f642c057de486083ff75bc6f5 *inst/CppCode/Utils.cpp
 45a1ee6b511a5a4d5728b310fd3bb068 *inst/CppCode/accessorClasses.cpp
 a46c951e6c350bcb9aaa455165d49129 *inst/CppCode/customizeMakeconf.R
-961a825cb07bbe05d2f03510bc7ec3bc *inst/CppCode/dists.cpp
+7bff80c87bcd84690e0102e4ba6710bc *inst/CppCode/dists.cpp
 54d59fee67bc2a4ab8152442579d7f49 *inst/CppCode/dllFinalizer.cpp
 ad8522a456c8c064879f9e265b3af6c9 *inst/CppCode/eigenUsingClasses.cpp
 012a0cdefd908d2d125187570951714f *inst/CppCode/nimDists.cpp
 a27bba4a4fbe802716c67e1eb36c39ad *inst/CppCode/nimOptim.cpp
 73f3a055927c6ca2f6f51955fe69429f *inst/CppCode/nimbleGraph.cpp
-9915143182b99516d45043b8b54afca2 *inst/CppCode/predefinedNimbleLists.cpp
+71fc99e350002c2c921b35e669f9e453 *inst/CppCode/predefinedNimbleLists.cpp
 f90db49645a2e072c6b689bea0215cfa *inst/CppCode/removeCustomizedMakeconf.R
 e18aa482c07df1e2462252f6d1a64f3f *inst/CppCode/smartPtrs.cpp
 4326160a69bc6f9818c5dc7450341b6a *inst/CppCode/tensorflow.cpp
-3bc38fb8e16d9b04a1cc5fbaa0ca7433 *inst/NEWS
+80d877c3d1fc5572765717224292c912 *inst/NEWS
 f03548dfe6904008291d2ece0dd14fc8 *inst/classic-bugs/LICENSE
 13c2270040eac65a231947608c1b26fd *inst/classic-bugs/R/Rcheck.R
 d7aa853ae08a5bf1cebbc7aaeb63cd23 *inst/classic-bugs/R/bench.R
