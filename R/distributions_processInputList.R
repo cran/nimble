@@ -205,6 +205,10 @@ distClass <- setRefClass(
             if(is(parsedArgList, 'try-error'))
                 stop("init_types_makeArgList: problem with arguments ", paste(typeArgCharVector, collapse = ","), ". Perhaps you didn't define types for your user-defined distribution nimbleFunctions?")
             allNames <- unlist(lapply(parsedArgList, function(pa) as.character(pa[[2]])))
+            if('x' %in% allNames) {
+                warning("init_types_makeArgList: Found 'x' in 'types', changing to 'value'.")
+                allNames[which('x' == allNames)] <- 'value'
+            }
             declExprs <- lapply(parsedArgList, function(pa) pa[[3]])
             allTypes <- unlist(lapply(parsedArgList, function(pa) as.character(pa[[3]][[1]])))
             allDims <- unlist(lapply(parsedArgList, function(pa) if(length(pa[[3]]) == 1) 0 else as.numeric(pa[[3]][[2]])))
@@ -770,8 +774,10 @@ getDimension <- function(dist, params = NULL, valueOnly = is.null(params) &&
       params <- getParamNames(dist, includeValue = TRUE)
   }
   notFound <- which(! params %in% getParamNames(dist))
-  if(length(notFound))
+  if(length(notFound)) {
+    if('x' %in% params[notFound]) warning("getDimension: use 'value' instead of 'x'.")
     stop("getDimension: these parameter names not found: ", params[notFound])
+  }
   out <- sapply(params, function(p) distInfo$types[[p]]$nDim)
   return(out)
 }
@@ -796,8 +802,10 @@ getParamID <- function(dist, params = NULL, valueOnly = is.null(params) &&
       params <- getParamNames(dist, includeValue = TRUE)
   }
   notFound <- which(! params %in% getParamNames(dist))
-  if(length(notFound))
+  if(length(notFound)) {
+    if('x' %in% params[notFound]) warning("getParamID: use 'value' instead of 'x'.")
     stop("getParamID: these parameter names not found: ", params[notFound])
+  }
   out <- distInfo$paramIDs[params]
   return(out)
 }
@@ -824,8 +832,10 @@ getType <- function(dist, params = NULL, valueOnly = is.null(params) &&
       params <- getParamNames(dist, includeValue = TRUE)
   }
     notFound <- which(! params %in% getParamNames(dist))
-    if(length(notFound))
+    if(length(notFound)) {
+        if('x' %in% params[notFound]) warning("getParamID: use 'value' instead of 'x'.")
         stop("getType: these parameter names not found: ", params[notFound])
+    }
     out <- sapply(params, function(p) distInfo$types[[p]]$type)
     return(out)
 }

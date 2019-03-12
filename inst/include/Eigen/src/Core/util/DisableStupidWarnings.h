@@ -42,7 +42,7 @@
     #pragma clang diagnostic push
   #endif
 // disabled for nimble because of CRAN flag: File which contains pragma(s) suppressing important diagnostics:
-//    #pragma clang diagnostic ignored "-Wconstant-logical-operand"
+//  #pragma clang diagnostic ignored "-Wconstant-logical-operand"
 
 #elif defined __GNUC__ && __GNUC__>=6
 

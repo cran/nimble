@@ -100,7 +100,7 @@ template<> EIGEN_STRONG_INLINE Packet2cf pset1<Packet2cf>(const std::complex<flo
   // Suppress annoying "may be used uninitialized in this function" warning with gcc >= 4.6
   #pragma GCC diagnostic push
 // disabled for nimble because of CRAN flag: File which contains pragma(s) suppressing important diagnostics:
-//  #pragma GCC diagnostic ignored "-Wuninitialized"
+//#pragma GCC diagnostic ignored "-Wuninitialized"
   res.v = _mm_loadl_pi(res.v, (const __m64*)&from);
   #pragma GCC diagnostic pop
 #else
