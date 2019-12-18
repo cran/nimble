@@ -735,7 +735,7 @@ test_mcmc_internal <- function(Rmodel, ##data = NULL, inits = NULL,
 }
 
 
-test_filter <- function(example, model, data = NULL, inits = NULL,
+test_filter <- function(example, model, data = list(), inits = list(),
                         verbose = nimbleOptions('verbose'), numItsR = 3, numItsC = 10000,
                         basic = TRUE, exactSample = NULL, results = NULL, resultsTolerance = NULL,
                         numItsC_results = numItsC,
@@ -801,7 +801,10 @@ test_filter <- function(example, model, data = NULL, inits = NULL,
             if(!is.null(filterControl))  Rfilter <- buildEnsembleKF(Rmodel, nodes = latentNodes, control = filterControl)
             else Rfilter <- buildEnsembleKF(Rmodel, nodes = latentNodes, control = list(saveAll = TRUE))
         }
-
+        saveAll <- TRUE 
+        if(!is.null(filterControl) && exists('saveAll', filterControl))
+            saveAll <- filterControl$saveAll
+        
         if(doCpp) {
             Cfilter <- compileNimble(Rfilter, project = Rmodel, dirName = dirName)
         }
@@ -809,7 +812,7 @@ test_filter <- function(example, model, data = NULL, inits = NULL,
         if(basic) {
             ## do short runs and compare R and C filter output
             if(doR) {
-                set.seed(seed);
+                set.seed(seed)
                 RfilterOut <- Rfilter$run(numItsR)
                 if(filterType == "ensembleKF"){
                     RmvSample  <- nfVar(Rfilter, 'mvSamples')
@@ -917,6 +920,10 @@ test_filter <- function(example, model, data = NULL, inits = NULL,
                     samplesToWeightsMatch <- rep(dim(C_weights)[2], dim(C_samples)[2])
                     latentIndices <- match(latentNames, dimnames(C_samples)[[2]])
                     latentSampLength <- length(latentNames)
+                    if(!saveAll) {  ## added without careful checking; may not be robust
+                        latentIndices <- latentIndices[!is.na(latentIndices)]
+                        latentSampLength <- 1
+                    }
                     latentDim <- latentSampLength/dim(C_weights)[2]
                     samplesToWeightsMatch[latentIndices] <- rep(1:dim(C_weights)[2], each = latentDim )
                 }
@@ -934,7 +941,11 @@ test_filter <- function(example, model, data = NULL, inits = NULL,
                             if(!grepl(varName, "[", fixed = TRUE))
                                 samplesNames <- gsub("\\[.*\\]", "", samplesNames)
                             matched <- which(varName == samplesNames)
-                            diff <- abs(postResult[matched] - results[[metric]][[varName]])
+                            if(!saveAll) {  ## added without careful checking; may not be robust
+                                diff <- abs(postResult[matched] - results[[metric]][[varName]][length(results[[metric]][[varName]])])
+                            } else {
+                                diff <- abs(postResult[matched] - results[[metric]][[varName]])
+                            }
                             for(ind in seq_along(diff)) {
                                 strInfo <- ifelse(length(diff) > 1, paste0("[", ind, "]"), "")
                                 expect_lt(diff[ind], resultsTolerance[[metric]][[varName]][ind],
@@ -1298,15 +1309,8 @@ test_dynamic_indexing_model_internal <- function(param) {
                     
                     cm[[param$invalidIndexes[[i]]$var[j]]] <- param$invalidIndexes[[i]]$value[j]
                 }
-                ## use expect_equal not expect_identical because in certain cases we get NA not NaN (having to do with other components of calc/sim output)
-                if(any(is.na(param$invalidIndexes[[i]]$value)) || (!is.null(param$invalidIndexes[[i]]$expect_R_calc_error) && param$invalidIndexes[[i]]$expect_R_calc_error)) {
-                    expect_error(calculate(m), "(missing value where|argument is of length zero)", info = paste0("problem with lack of error in R calculate with NA indexes, case: ", i))
-                    ## When NA is given, R calculate fails with missing value and dynamic index error not flagged explicitly
-                    ## When 0 is the nested index, R calculate fails with length zero argument and dynamic index error not flagged
-                } else {
-                    expect_output(out <- calculate(m), "dynamic index out of bounds", info = paste0("problem with lack of warning in R calculate with non-NA invalid indexes, case: ", i))
-                    expect_equal(out, NaN, info = paste0("problem with lack of NaN in R calculate with non-NA invalid indexes, case: ", i))
-                }
+                expect_output(out <- calculate(m), "dynamic index out of bounds", info = paste0("problem with lack of warning in R calculate with non-NA invalid indexes, case: ", i))
+                expect_equal(out, NaN, info = paste0("problem with lack of NaN in R calculate with non-NA invalid indexes, case: ", i))
                 expect_output(out <- calculate(cm), "dynamic index out of bounds", info = paste0("problem with lack of warning in C calculate with invalid indexes, case: ", i))
                 expect_equal(out, NaN, info = paste0("problem with lack of NaN in C calculate with invalid indexes, case: ", i))
                 expect_output(out <- calculateDiff(cm), "dynamic index out of bounds", info = paste0("problem with lack of warning in C calculateDiff with invalid indexes, case: ", i))

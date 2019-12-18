@@ -622,7 +622,7 @@ conjugacyClass <- setRefClass(
             if(getNimbleOption('verifyConjugatePosteriors')) {
                 functionBody$addCode({
                     modelLogProb0 <- getLogProb(model, calcNodes)
-                    origValue <- model[[target]]
+                    origTargetValue <- model[[target]]
                 })
             }
 
@@ -632,8 +632,8 @@ conjugacyClass <- setRefClass(
             ## generate new value, store, calculate, copy, etc...
             functionBody$addCode(posteriorObject$prePosteriorCodeBlock, quote = FALSE)
             functionBody$addCode({
-                newValue <- RPOSTERIORCALL
-                model[[target]] <<- newValue
+                newTargetValue <- RPOSTERIORCALL
+                model[[target]] <<- newTargetValue
                 calculate(model, calcNodes)
                 nimCopy(from = model, to = mvSaved, row = 1, nodes = calcNodes, logProb = TRUE)
             }, list(RPOSTERIORCALL = posteriorObject$rCallExpr))
@@ -647,8 +647,8 @@ conjugacyClass <- setRefClass(
                     if(abs(posteriorVerification) > 1e-8)     {
                         nimPrint('conjugate posterior density appears to be wrong, off by ', posteriorVerification)
                     }
-                }, list(DPOSTERIORCALL_ORIG = eval(substitute(substitute(expr, list(VALUE=quote(origValue))), list(expr=posteriorObject$dCallExpr))),
-                        DPOSTERIORCALL_NEW  = eval(substitute(substitute(expr, list(VALUE=quote(newValue))),  list(expr=posteriorObject$dCallExpr)))))
+                }, list(DPOSTERIORCALL_ORIG = eval(substitute(substitute(expr, list(VALUE=quote(origTargetValue))), list(expr=posteriorObject$dCallExpr))),
+                        DPOSTERIORCALL_NEW  = eval(substitute(substitute(expr, list(VALUE=quote(newTargetValue))),  list(expr=posteriorObject$dCallExpr)))))
             }
 
             functionDef <- quote(function() {})
@@ -659,18 +659,24 @@ conjugacyClass <- setRefClass(
 
         genGetPosteriorLogDensityFunction = function(dependentCounts, doDependentScreen = FALSE) {
             functionBody <- codeBlockClass()
-
+            
+            functionBody$addCode(origTargetValue <- model[[target]])
+            
             ## adds code to generate the quantities prior_xxx, and contribution_xxx
             addPosteriorQuantitiesGenerationCode(functionBody = functionBody, dependentCounts = dependentCounts, doDependentScreen = doDependentScreen)
 
             ## calculate and return the (log)density for the current value of target
             functionBody$addCode(posteriorObject$prePosteriorCodeBlock, quote = FALSE)
+            if(link != 'identity') {
+                functionBody$addCode({
+                    model[[target]] <<- origTargetValue
+                    model$calculate(calcNodesDeterm)})
+            }
             functionBody$addCode({
-                targetValue <- model[[target]]
                 posteriorLogDensity <- DPOSTERIORCALL
                 returnType(double())
                 return(posteriorLogDensity)
-            }, list(DPOSTERIORCALL = eval(substitute(substitute(expr, list(VALUE=quote(targetValue))), list(expr=posteriorObject$dCallExpr)))))
+            }, list(DPOSTERIORCALL = eval(substitute(substitute(expr, list(VALUE=quote(origTargetValue))), list(expr=posteriorObject$dCallExpr)))))
 
             functionDef <- quote(function() {})
             functionDef[[3]] <- functionBody$getCode()
@@ -1221,10 +1227,16 @@ cc_checkLinearity <- function(expr, targetNode) {
 
     ## Look for individual nodes in vectorized use or other strange cases.
     if(expr[[1]] == 'structureExpr') {
-        if(sum(targetNode == sapply(expr[2:length(expr)], deparse)) == 1 &&
-           sum(sapply(expr[2:length(expr)], function(x)
-                      cc_nodeInExpr(targetNode, x))) == 1)
-            return(list(offset = expr, scale = 1)) else return(NULL)
+        ## Can't have target appear multiple times.
+	if(sum(sapply(expr[2:length(expr)], function(x)
+            cc_nodeInExpr(targetNode, x))) != 1)
+            return(NULL)
+        wh <- which(sapply(expr[2:length(expr)], function(x)
+            cc_nodeInExpr(targetNode, x)))
+        checkLinearityStrucExpr <- cc_checkLinearity(expr[[wh+1]], targetNode)
+        if(is.null(checkLinearityStrucExpr)) return(NULL)
+        return(list(offset = cc_combineExprsAddition(expr, checkLinearityStrucExpr$offset),  # was expr?,
+                    scale = checkLinearityStrucExpr$scale))
     }
 
     ## we'll just have to skip over asRow() and asCol(), so they don't mess up the linearity check
@@ -1279,6 +1291,9 @@ cc_checkLinearity <- function(expr, targetNode) {
         checkLinearityRHS <- cc_checkLinearity(expr[[3]], targetNode)
         if(is.null(checkLinearityLHS) || is.null(checkLinearityRHS)) return(NULL)
         if((checkLinearityLHS$scale != 0) && (checkLinearityRHS$scale != 0)) stop('cc_checkLinearity: incompatible scales in * operation')
+        if((checkLinearityLHS$scale == 0) && (checkLinearityRHS$scale == 0)) {
+            return(list(offset = cc_combineExprsMultiplication(checkLinearityLHS$offset, checkLinearityRHS$offset, isMatrixMult),
+                        scale  = 0)) }
         if(checkLinearityLHS$scale != 0) {
             return(list(offset = cc_combineExprsMultiplication(checkLinearityLHS$offset, checkLinearityRHS$offset, isMatrixMult),
                         scale  = cc_combineExprsMultiplication(checkLinearityLHS$scale,  checkLinearityRHS$offset, isMatrixMult))) }
