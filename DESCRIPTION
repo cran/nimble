@@ -14,8 +14,8 @@ Description: A system for writing hierarchical statistical models largely
     'BUGS'/'JAGS' language for writing models, one can use 'NIMBLE' for writing
     arbitrary other kinds of model-generic algorithms as well. A full User Manual is
     available at <https://r-nimble.org>.
-Version: 0.9.0
-Date: 2019-12-14
+Version: 0.9.1
+Date: 2020-05-19
 Maintainer: Christopher Paciorek <paciorek@stat.berkeley.edu>
 Authors@R: c(
     person("Perry", "de Valpine", role = "aut"),
@@ -25,7 +25,8 @@ Authors@R: c(
     person("Cliff", "Anderson-Bergman", role = "aut"),
     person("Fritz", "Obermeyer", role = "aut"),
     person("Claudia", "Wehrhahn Cortes", role = "aut", comment = "Bayesian nonparametrics system"),
-    person("Abel", "Rodriguez", role = "aut", comment = "Bayesian nonparametrics system"),
+    person("Abel", "Rodr\u00ecguez", role = "aut", comment = "Bayesian nonparametrics system"),
+    person("Duncan", "Temple Lang", role = "aut", comment = "packaging configuration"),
     person("Sally", "Paganin", role = "aut", comment = "reversible jump MCMC"),
     person("Jagadish", "Babu", role = "ctb", comment = "code for the compilation system for an early version of NIMBLE"),
     person("Dao", "Nguyen", role = "ctb", comment = "contributions to the IF2 code"),
@@ -35,7 +36,7 @@ Authors@R: c(
 Depends: R (>= 3.1.2)
 Imports: methods,igraph,coda,R6
 Suggests: testthat
-URL: https://r-nimble.org
+URL: https://r-nimble.org, https://github.com/nimble-dev/nimble
 SystemRequirements: GNU make
 License: BSD_3_clause + file LICENSE | GPL (>= 2)
 Copyright: See COPYRIGHTS file.
@@ -46,6 +47,7 @@ Note: For convenience, the package includes the necessary header files
         Eigen code is very permissive and allows us to distribute it
         with this package. See <http://eigen.tuxfamily.org/index.php?
         title=Main_Page> and also the License section on that page.
+Encoding: UTF-8
 LazyData: false
 Collate: config.R all_utils.R options.R distributions_inputList.R
         distributions_processInputList.R
@@ -86,7 +88,7 @@ Collate: config.R all_utils.R options.R distributions_inputList.R
         zzz.R
 RoxygenNote: 5.0.1
 NeedsCompilation: yes
-Packaged: 2019-12-18 20:19:14 UTC; paciorek
+Packaged: 2020-05-19 23:11:03 UTC; paciorek
 Author: Perry de Valpine [aut],
   Christopher Paciorek [aut, cre],
   Daniel Turek [aut],
@@ -94,7 +96,8 @@ Author: Perry de Valpine [aut],
   Cliff Anderson-Bergman [aut],
   Fritz Obermeyer [aut],
   Claudia Wehrhahn Cortes [aut] (Bayesian nonparametrics system),
-  Abel Rodriguez [aut] (Bayesian nonparametrics system),
+  Abel Rodrìguez [aut] (Bayesian nonparametrics system),
+  Duncan Temple Lang [aut] (packaging configuration),
   Sally Paganin [aut] (reversible jump MCMC),
   Jagadish Babu [ctb] (code for the compilation system for an early
     version of NIMBLE),
@@ -102,4 +105,4 @@ Author: Perry de Valpine [aut],
   Lauren Ponisio [ctb] (contributions to the cross-validation code),
   Peter Sujan [ctb] (multivariate t distribution code)
 Repository: CRAN
-Date/Publication: 2019-12-18 21:10:02 UTC
+Date/Publication: 2020-05-22 09:00:02 UTC

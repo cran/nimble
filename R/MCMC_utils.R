@@ -165,7 +165,7 @@ setAndCalculateDiff <- nimbleFunction(
 
 calcAdaptationFactor <- nimbleFunction(
     name = 'calcAdaptationFactor',
-    setup = function(paramDimension) {
+    setup = function(paramDimension, adaptFactorExponent) {
         ## optimal acceptance rates:  (dim=1) .44,    (dim=2) .35,    (dim=3) .32,    (dim=4) .25,    (dim>=5) .234
         acceptanceRates <- c(0.44, 0.35, 0.32, 0.25, 0.234)
         if(paramDimension > 5)     paramDimension <- 5
@@ -175,13 +175,17 @@ calcAdaptationFactor <- nimbleFunction(
     },
     run = function(acceptanceRate = double()) {
         timesAdapted <<- timesAdapted + 1
-        gamma1 <<- 1 / ((timesAdapted + 3) ^ 0.8)   ## need this variable separate; it's extracted for use in 'RW_block' sampler
+        gamma1 <<- 1 / ((timesAdapted + 3) ^ adaptFactorExponent)   ## need this variable separate; it's extracted for use in 'RW_block' sampler
         gamma2 <- 10 * gamma1
         adaptFactor <- exp(gamma2 * (acceptanceRate - optimalAR))
         returnType(double())
         return(adaptFactor)
     },
     methods = list(
+        getGamma1 = function() {
+            returnType(double())
+            return(gamma1)
+        },
         reset = function() {
             timesAdapted <<- 0
             gamma1       <<- 0
@@ -264,7 +268,7 @@ mcmc_listContentsToStr <- function(ls, displayControlDefaults=FALSE, displayNonS
             if(is.numeric(controlValue) || is.logical(controlValue))
                 if(length(controlValue) > 1)
                     controlValue <- ifelse(is.null(dim(controlValue)), 'custom vector', 'custom array')
-        if(class(controlValue) == 'samplerConf')   controlValue <- controlValue$name
+        if(inherits(controlValue, 'samplerConf'))   controlValue <- controlValue$name
         deparsedItem <- deparse(controlValue)
         if(length(deparsedItem) > 1) deparsedItem <- paste0(deparsedItem, collapse='')
         ls2[[i]] <- paste0(controlName, ': ', deparsedItem)
