@@ -4,9 +4,9 @@
 #' NIMBLE language functions for R-like vector construction
 #'
 #' The functions \code{c}, \code{rep}, \code{seq}, \code{which}, \code{diag}, \code{length}, \code{seq_along}, \code{is.na}, \code{is.nan}, \code{any}, and \code{all} can be used in nimbleFunctions and compiled using \code{compileNimble}.
-#' 
+#'
 #' @name nimble-R-functions
-#' 
+#'
 #' @param ... values to be concatenated.
 #' @param x vector of values to be replicated (\code{rep}), or logical array or vector (\code{which}), or object whose length is wanted (\code{length}), or input value (\code{diag}), or vector of values to be tested/checked (\code{is.na}, \code{is.nan}, \code{any}, \code{all}).
 #' @param from starting value of sequence.
@@ -33,7 +33,7 @@
 #' 
 #' \code{seq_along} behaves like the R version.
 #'
-#' \code{is.na} behaves like the R version but does not correctly handle \code{NA} values from R that are type 'logical', so convert these using \code{as.numeric} before passing from R to NIMBLE.
+#' \code{is.na} behaves like the R version but does not correctly handle \code{NA} values from R that are type 'logical', so convert these using \code{as.numeric()} before passing from R to NIMBLE.
 #' 
 #' \code{is.nan} behaves like the R version, but treats \code{NA} of type 'double' as being \code{NaN} and \code{NA} of type 'logical' as not being \code{NaN}. 
 #' 
@@ -165,34 +165,56 @@ makeParamInfo <- function(model, nodes, param) {
     ## updating to allow nodes to be a vector. getParam only works for a scalar but in a case like nodes[i] the param info is set up for the entire vector.
 
     ## this allows for(i in seq_along(nodes)) a <- a + model$getParam(nodes[i], 'mean') through compilation even if some instances have nodes empty and so won't be called.
-    if(length(nodes) == 0) return(structure(c(list(paramID = integer()), type = NA, nDim = NA), class = 'getParam_info'))
-
-    distNames <- model$getDistribution(nodes)
-
-    if(length(param) != 1) stop(paste0(paste0('Problem with param(s) ', paste0(param, collapse = ','), ' while setting up getParam for node ', nodes,
-                                              '\nOnly one parameter is allowed.')))
-
-    distInfos <- lapply(distNames, getDistributionInfo)
-    paramIDvec <- unlist(lapply(distInfos, function(x) x$paramIDs[param]))
-
-    ## this check needed because getParamID no longer called
-    if(any(is.na(paramIDvec)))
-        stop(paste0("getParam: parameter '", param, "' not found in distribution ",
-                    paste0(unique(distNames), collapse = ','), "."))
+  if(length(nodes) == 0) return(structure(c(list(paramID = integer()), type = NA, nDim = NA), class = 'getParam_info'))
+  
+  if(length(param) != 1) stop(paste0(paste0('Problem with param(s) ', paste0(param, collapse = ','), ' while setting up getParam for node ', nodes,
+                                            '\nOnly one parameter is allowed.')))
+  
+  nodeIDs <- model$expandNodeNames(nodes, returnType = 'ids')
+  nodeDeclIDs <- model$modelDef$maps$graphID_2_declID[nodeIDs]
+  declID2nodeIDs <- split(nodeIDs, nodeDeclIDs)
+  numDeclIDs <- length(declID2nodeIDs)
+  paramIDs <- integer(numDeclIDs)
+  types <- character(numDeclIDs)
+  nDims <- integer(numDeclIDs)
+  for(i in seq_along(declID2nodeIDs)) {
+    nodeIDsFromOneDecl <- declID2nodeIDs[[i]]
+    firstNodeName <- model$modelDef$maps$graphID_2_nodeName[nodeIDsFromOneDecl[1]]
+    dist <- model$getDistribution(firstNodeName)
+    distInfo <- getDistributionInfo(dist)
+    paramIDs[i] <- distInfo$paramIDs[param]
+    if(is.na(paramIDs[i]))
+      stop(paste0("getParam: parameter '", param, "' not found in distribution ",
+                  dist, "."))
+    types[i] <- distInfo$types[[param]]$type
+    nDims[i] <- distInfo$types[[param]]$nDim
+  }
+  if(length(unique(types)) != 1 || length(unique(nDims)) != 1)
+    stop('cannot have an indexed vector of nodes used in getParam if they have different types or dimensions for the same parameter.')
     
-    typeVec <- unlist(lapply(distInfos, function(x) x$types[[param]]$type))
-    nDimVec <- unlist(lapply(distInfos, function(x) x$types[[param]]$nDim))
-    
-   ## paramIDvec <- sapply(distNames, getParamID, param)
-   ## typeVec <- sapply(distNames, getType, param)
-   ## nDimVec <- sapply(distNames, getDimension, param)
-    if(length(unique(typeVec)) != 1 || length(unique(nDimVec)) != 1) stop('cannot have an indexed vector of nodes used in getParam if they have different types or dimensions for the same parameter.')
+  ## on C++ side, we always work with double
+  if(types[1] %in% c('integer', 'logical')) types[1] <- 'double'
 
-    ## on C++ side, we always work with double
-    if(typeVec[1] %in% c('integer', 'logical')) typeVec[1] <- 'double'
-    ans <- c(list(paramID = paramIDvec), type = typeVec[1], nDim = nDimVec[1])
-    class(ans) <- 'getParam_info'
-    ans
+  if(length(paramIDs) == 1) { ## We could shortcut on this case earlier
+    paramIDvec <- paramIDs
+  } else {
+    if(length(unique(paramIDs)) == 1) {
+      # They are all the same.
+      # We encode this in a sparse way
+      paramIDvec <- c(-1L, paramIDs[1])
+    } else {
+      ## Otherwise, create a full vector of paramIDs
+      paramIDvec <- rep(1L, length(nodeIDs))
+      sourceIDs <- split(seq_along(nodeIDs), nodeDeclIDs)
+      for(i in seq_along(declID2nodeIDs)) { #unsplit() would be another approach to this step.
+        paramIDvec[sourceIDs[[i]] ] <- paramIDs[i]
+      }
+    }
+  }
+    
+  ans <- c(list(paramID = paramIDvec), type = types[1], nDim = nDims[1])
+  class(ans) <- 'getParam_info'
+  ans
 }
 
 defaultParamInfo <- function() {
@@ -668,6 +690,8 @@ values <- function(model, nodes, accessorIndex){
 #' @param rowTo		If \code{to} is a modelValues, the row which will be copied to. If \code{rowTo == NA}, will automatically be set to \code{row}
 #' @param logProb	A logical value indicating whether the log probabilities of the given nodes should also be copied (i.e. if \code{nodes = 'x'}
 #' and \code{logProb = TRUE}, then both \code{'x'} and \code{'logProb_x'} will be copied)
+#' @param logProbOnly   A logical value indicating whether only the log probabilities of the given nodes should be copied (i.e. if \code{nodes = 'x'}
+#' and \code{logProbOnly = TRUE}, then only \code{'logProb_x'} will be copied)
 #'
 #' @aliases copy
 #'
@@ -707,14 +731,14 @@ values <- function(model, nodes, accessorIndex){
 #' 
 #' cCopy$run() ## execute the copy with the compiled function
 #' }
-nimCopy <- function(from, to, nodes = NULL, nodesTo = NULL, row = NA, rowTo = NA, logProb = FALSE){
+nimCopy <- function(from, to, nodes = NULL, nodesTo = NULL, row = NA, rowTo = NA, logProb = FALSE, logProbOnly = FALSE){
     if(is.null(nodes) )
         nodes = from$getVarNames(includeLogProb = logProb) ## allNodeNames(from)
     if( inherits(from, "modelBaseClass") ){
-        accessFrom = modelVariableAccessorVector(from, nodes, logProb = logProb)
+        accessFrom = modelVariableAccessorVector(from, nodes, logProb = logProb, logProbOnly = logProbOnly)
     } else
         if(inherits(from, "modelValuesBaseClass") || inherits(from, "CmodelValues")) {
-            accessFrom = modelValuesAccessorVector(from, nodes, logProb = logProb)
+            accessFrom = modelValuesAccessorVector(from, nodes, logProb = logProb, logProbOnly = logProbOnly)
             if(is.na(row))
                 stop("Error: need to supply 'row' for a modelValues copy")
             ##accessFrom$setRow(row) ## NEW ACCESSORS
@@ -723,15 +747,15 @@ nimCopy <- function(from, to, nodes = NULL, nodesTo = NULL, row = NA, rowTo = NA
 
     if( inherits(to, "modelBaseClass") ){
         if(is.null(nodesTo) ) 
-            accessTo = modelVariableAccessorVector(to, nodes, logProb = logProb)
+            accessTo = modelVariableAccessorVector(to, nodes, logProb = logProb, logProbOnly = logProbOnly)
         else
-            accessTo = modelVariableAccessorVector(to, nodesTo, logProb = logProb)
+            accessTo = modelVariableAccessorVector(to, nodesTo, logProb = logProb, logProbOnly = logProbOnly)
     } else
         if(inherits(to, "modelValuesBaseClass") || inherits(to, "CmodelValues")) {
             if(is.null(nodesTo) ) 
-                accessTo = modelValuesAccessorVector(to, nodes, logProb = logProb)
+                accessTo = modelValuesAccessorVector(to, nodes, logProb = logProb, logProbOnly = logProbOnly)
             else
-                accessTo = modelValuesAccessorVector(to, nodesTo, logProb = logProb)
+                accessTo = modelValuesAccessorVector(to, nodesTo, logProb = logProb, logProbOnly = logProbOnly)
             if(is.na(rowTo))
                 rowTo = row
             ##accessTo$setRow(rowTo) ## NEW ACCESSORS

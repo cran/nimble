@@ -15,6 +15,8 @@
 \alias{printSamplers}
 \alias{removeSamplers}
 \alias{resetMonitors}
+\alias{setMonitors}
+\alias{setMonitors2}
 \alias{setSamplerExecutionOrder}
 \alias{setSamplers}
 \alias{setThin}
@@ -204,6 +206,28 @@ Details: See the initialize() function
 Arguments:
 
 waic: A logical argument, indicating whether to enable WAIC calculations in the resulting MCMC algorithm (default TRUE).}
+
+\item{\code{setMonitors(..., ind = 1, print = TRUE)}}{Sets new variables to the list of monitors.
+
+Arguments:
+
+...: One or more character vectors of indexed nodes, or variables, which are to be monitored.  These replace the current monitors list.
+
+print: A logical argument specifying whether to print all current monitors (default TRUE).
+
+Details: See the initialize() function
+            }
+
+\item{\code{setMonitors2(..., print = TRUE)}}{Sets new variables to the list of monitors2.
+
+Arguments:
+
+...: One or more character vectors of indexed nodes, or variables, which are to be monitored.  These replace the current monitors2 list.
+
+print: A logical argument specifying whether to print all current monitors (default TRUE).
+
+Details: See the initialize() function
+            }
 
 \item{\code{setSampler(...)}}{Alias for setSamplers method}
 

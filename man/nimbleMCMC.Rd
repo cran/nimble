@@ -4,11 +4,11 @@
 \alias{nimbleMCMC}
 \title{Executes one or more chains of NIMBLE's default MCMC algorithm, for a model specified using BUGS code}
 \usage{
-nimbleMCMC(code, constants = list(), data = list(), inits, model, monitors,
-  thin = 1, niter = 10000, nburnin = 0, nchains = 1, check = TRUE,
-  setSeed = FALSE, progressBar = getNimbleOption("MCMCprogressBar"),
-  samples = TRUE, samplesAsCodaMCMC = FALSE, summary = FALSE,
-  WAIC = FALSE)
+nimbleMCMC(code, constants = list(), data = list(), inits,
+  dimensions = list(), model, monitors, thin = 1, niter = 10000,
+  nburnin = 0, nchains = 1, check = TRUE, setSeed = FALSE,
+  progressBar = getNimbleOption("MCMCprogressBar"), samples = TRUE,
+  samplesAsCodaMCMC = FALSE, summary = FALSE, WAIC = FALSE)
 }
 \arguments{
 \item{code}{The quoted code expression representing the model, such as the return value from a call to \code{nimbleCode}). Not required if \code{model} is provided.}
@@ -18,6 +18,8 @@ nimbleMCMC(code, constants = list(), data = list(), inits, model, monitors,
 \item{data}{Named list of values for the data nodes.  Data values can be subsequently modified.  Providing this argument also flags nodes as having data for purposes of algorithms that inspect model structure. Values that are NA will not be flagged as data.}
 
 \item{inits}{Argument to specify initial values for the model object, and for each MCMC chain.  See details.}
+
+\item{dimensions}{Named list of dimensions for variables.  Only needed for variables used with empty indices in model code that are not provided in constants or data.}
 
 \item{model}{A compiled or uncompiled NIMBLE model object.  When provided, this model will be used to configure the MCMC algorithm to be executed, rather than using the \code{code}, \code{constants}, \code{data} and \code{inits} arguments to create a new model object.  However, if also provided, the \code{inits} argument will still be used to initialize this model prior to running each MCMC chain.}
 

@@ -57,7 +57,7 @@ For \code{c}, \code{rep}, \code{seq}, these functions are NIMBLE's version of si
 
 \code{seq_along} behaves like the R version.
 
-\code{is.na} behaves like the R version but does not correctly handle \code{NA} values from R that are type 'logical', so convert these using \code{as.numeric} before passing from R to NIMBLE.
+\code{is.na} behaves like the R version but does not correctly handle \code{NA} values from R that are type 'logical', so convert these using \code{as.numeric()} before passing from R to NIMBLE.
 
 \code{is.nan} behaves like the R version, but treats \code{NA} of type 'double' as being \code{NaN} and \code{NA} of type 'logical' as not being \code{NaN}. 
 

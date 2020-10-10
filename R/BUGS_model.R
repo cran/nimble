@@ -36,13 +36,41 @@ modelBaseClass <- setRefClass('modelBaseClass',
                                   nimbleProject = 'ANY'
                                   ),
                               methods = list(
-                                  calculate = function(nodes) nimble::calculate(.self, nodes),
-                                  calculateDiff = function(nodes) nimble::calculateDiff(.self, nodes),
-                                  getLogProb = function(nodes) nimble::getLogProb(.self, nodes),
-                                  simulate = function(nodes, includeData = FALSE) nimble::simulate(.self, nodes, includeData),
-                                  getParam = function(node, param) nimble::getParam(.self, node, param),
-                                  getBound = function(node, bound) nimble::getBound(.self, node, bound),
-
+                                  calculate = function(nodes) {
+'
+See `help(calculate)`
+'
+                                      nimble::calculate(.self, nodes)
+                                  },
+                                  calculateDiff = function(nodes) {
+'
+See `help(calculateDiff)`
+'
+                                      nimble::calculateDiff(.self, nodes)
+                                  },
+                                  getLogProb = function(nodes) {
+'
+See `help(getLogProb)`
+'
+                                      nimble::getLogProb(.self, nodes)
+                                  },
+                                  simulate = function(nodes, includeData = FALSE) {
+'
+See `help(simulate)`                                                                                                                                                                                                                                
+'
+                                      nimble::simulate(.self, nodes, includeData)
+                                  },
+                                  getParam = function(node, param) {                                                                                                                                                                                 '
+See `help(getParam)`                                                                                                                                                                                                                               
+'
+                                      nimble::getParam(.self, node, param)
+                                  },
+                                  getBound = function(node, bound) {
+'                                                                                                                                                                                                                                                    
+See `help(getBound)`                                                                                                                                                                                                                               
+'
+                                      nimble::getBound(.self, node, bound)
+                                  },
                                   getGraph = function() graph,
                                   setGraph = function(value) graph <<- value,
                                   plotGraph = function() igraph::plot.igraph(graph),
@@ -467,7 +495,7 @@ unique: should names be the unique names or should original ordering of nodes (a
 '
 
                                       if(length(nodes) == 0) return(if(returnType=='names') character() else numeric())
-                                      graphID <- modelDef$nodeName2GraphIDs(nodes, !returnScalarComponents, unique = unique)
+                                      graphID <- modelDef$nodeName2GraphIDs(nodes, !returnScalarComponents, unique = unique, ignoreNotFound = TRUE)
                                       expandNodeNamesFromGraphIDs(graphID, returnScalarComponents, returnType, sort)
                                       ## if(sort)
                                       ##     graphID <- sort(graphID)
