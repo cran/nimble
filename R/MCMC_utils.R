@@ -344,13 +344,32 @@ extractControlElement <- function(controlList, elementName, defaultValue, error)
 
 
 #' @export
-samplesSummary <- function(samples) {
-    cbind(
+samplesSummary <- function(samples, round) {
+    summary <- try(cbind(
         `Mean`      = apply(samples, 2, mean),
         `Median`    = apply(samples, 2, median),
         `St.Dev.`   = apply(samples, 2, sd),
         `95%CI_low` = apply(samples, 2, function(x) quantile(x, 0.025)),
-        `95%CI_upp` = apply(samples, 2, function(x) quantile(x, 0.975)))
+        `95%CI_upp` = apply(samples, 2, function(x) quantile(x, 0.975))),
+                   silent = TRUE)
+    if(inherits(summary, 'try-error')) {
+        warning('Could not calculate the full summary of posterior samples, possibly due to NA or NaN values present in the samples array', call. = FALSE)
+        summary <- array(as.numeric(NA), dim = c(ncol(samples), 5))
+        rownames(summary) <- colnames(samples)
+        colnames(summary) <- c('Mean','Median','St.Dev.','95%CI_low','95%CI_upp')
+        if(ncol(samples) > 0) for(i in 1:ncol(samples)) {
+            theseSamples <- samples[,i]
+            if(isValid(theseSamples)) {
+                summary[i, 1] <- mean(theseSamples)
+                summary[i, 2] <- median(theseSamples)
+                summary[i, 3] <- sd(theseSamples)
+                summary[i, 4] <- quantile(theseSamples, 0.025)
+                summary[i, 5] <- quantile(theseSamples, 0.975)
+            }
+        }
+    }
+    if(!missing(round)) summary <- round(summary, digits = round)
+    return(summary)
 }
 
 
@@ -369,9 +388,23 @@ mcmc_processMonitorNames <- function(model, nodes) {
     return(c(expandedNodeNames, expandedLogProbNames))
 }
 
+## As of 0.10.1 stop WAIC if not monitoring all parameters of data nodes
+mcmc_checkWAICmonitors_conditional <- function(model, monitors, dataNodes) {
+    parentNodes <- getParentNodes(dataNodes, model, stochOnly = TRUE)
+    parentVars <- model$getVarNames(nodes = parentNodes)
+    wh <- which(!parentVars %in% monitors)
+    if(length(wh)) {
+        if(length(wh) > 10)
+            badVars <- c(parentVars[wh[1:10]], "...") else badVars <- parentVars[wh]
+        stop(paste0("To calculate WAIC in NIMBLE, all parameters of",
+                    " data nodes in the model must be monitored.", "\n", 
+                    "  Currently, the following parameters are not monitored: ",
+                    paste0(badVars, collapse = ", ")))
+    }
+    message('Monitored nodes are valid for WAIC.')
+}
 
-
-
+## Used through version 0.10.0 and likely to be used in some form once we re-introduce mWAIC
 mcmc_checkWAICmonitors <- function(model, monitors, dataNodes) {
     monitoredDetermNodes <- model$expandNodeNames(monitors)[model$isDeterm(model$expandNodeNames(monitors))]
     if(length(monitoredDetermNodes) > 0) {
