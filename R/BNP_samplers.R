@@ -21,6 +21,8 @@ getNsave <- nimbleFunction(
 #' @param MCMC an MCMC class object, either compiled or uncompiled.
 #' @param epsilon  used for determining the truncation level of the representation of the random measure.
 #' @param setSeed Logical or numeric argument. If a single numeric value is provided, R's random number seed will be set to this value. In the case of a logical value, if \code{TRUE}, then R's random number seed will be set to \code{1}. Note that specifying the argument \code{setSeed = 0} does not prevent setting the RNG seed, but rather sets the random number generation seed to \code{0}.  Default value is \code{FALSE}.
+#'
+#' @param progressBar Logical specifying whether to display a progress bar during execution (default = TRUE).  The progress bar can be permanently disabled by setting the system option \code{nimbleOptions(MCMCprogressBar = FALSE)}
 #' 
 #' @author Claudia Wehrhahn and Christopher Paciorek
 #' 
@@ -51,7 +53,7 @@ getNsave <- nimbleFunction(
 #'   runMCMC(cmcmc, niter = 1000)
 #'   outputG <- getSamplesDPmeasure(cmcmc)
 #' }
-getSamplesDPmeasure <- function(MCMC, epsilon = 1e-4, setSeed = FALSE) {
+getSamplesDPmeasure <- function(MCMC, epsilon = 1e-4, setSeed = FALSE, progressBar = getNimbleOption('MCMCprogressBar')) {
   if(exists('model',MCMC, inherits = FALSE)) compiled <- FALSE else compiled <- TRUE
   if(compiled) {
     if(!exists('Robject', MCMC, inherits = FALSE) || !exists('model', MCMC$Robject, inherits = FALSE))
@@ -74,18 +76,36 @@ getSamplesDPmeasure <- function(MCMC, epsilon = 1e-4, setSeed = FALSE) {
       nimCat('getSamplesDPmeasure: setSeed argument has length > 1 and only the first element will be used') 
     }
   } else if(setSeed) set.seed(1)
+
+  progressBarLength <- 52  ## multiples of 4 only
+  progressBarIncrement <- niter/(progressBarLength+3)
+  progressBarNext <- progressBarIncrement
+  progressBarNextFloor <- floor(progressBarNext)
+
   
   if(compiled) {
     csampler <- compileNimble(rsampler, project = model)
+    if(progressBar) { for(iPB1 in 1:4) { cat('|'); for(iPB2 in 1:(progressBarLength/4)) cat('-') }; cat('|\n'); cat('|') }
     for(i in 1:niter) {
       samplesMeasure[[i]] <- csampler$run(i)
+      if(progressBar && (i == progressBarNextFloor)) {
+          cat('-')
+          progressBarNext <- progressBarNext + progressBarIncrement
+          progressBarNextFloor <- floor(progressBarNext)
+      }
     }
   } else {
     for(i in 1:niter) {
+      if(progressBar) { for(iPB1 in 1:4) { cat('|'); for(iPB2 in 1:(progressBarLength/4)) cat('-') }; print('|'); cat('|') }    
       samplesMeasure[[i]] <- rsampler$run(i)
+      if(progressBar && (i == progressBarNextFloor)) {
+          cat('-')
+          progressBarNext <- progressBarNext + progressBarIncrement
+          progressBarNextFloor <- floor(progressBarNext)
+      }
     }
   }
-  
+  if(progressBar) cat('|\n')
   
   dcrpVar <- rsampler$dcrpVar
   clusterVarInfo <- findClusterNodes(model, dcrpVar) 
@@ -1406,7 +1426,7 @@ sampler_CRP <- nimbleFunction(
         stop('sampler_CRP: In a model with multiple cluster parameters, the number of those parameters must all be the same.\n')
     min_nTilde <- nTilde[1]
     if(min_nTilde < n)
-      warning('sampler_CRP: The number of clusters based on the cluster parameters is less than the number of potential clusters. The MCMC is not strictly valid if it ever proposes more components than cluster parameters exist; NIMBLE will warn you if this occurs.\n')
+      warning('sampler_CRP: The number of clusters based on the cluster parameters is less than the number of potential clusters. The MCMC is not strictly valid if it ever proposes more components than cluster parameters exist; NIMBLE will warn you if this occurs.\n', call. = FALSE)
     
     ## Determine if concentration parameter is fixed or random (code similar to the one in sampleDPmeasure function).
     ## This is used in truncated case to tell user if model is proper or not.
@@ -1448,26 +1468,28 @@ sampler_CRP <- nimbleFunction(
       sampler <- 'CRP_nonconjugate'
     } else 
       sampler <- switch(conjugacyResult,
-                        conjugate_dnorm_dnorm = 'CRP_conjugate_dnorm_dnorm',
-                        conjugate_dmnorm_dmnorm = 'CRP_conjugate_dmnorm_dmnorm',
-                        conjugate_dnorm_dnorm_nonidentity = 'CRP_conjugate_dnorm_dnorm_nonidentity',
-                        conjugate_dinvgamma_dnorm = 'CRP_conjugate_dinvgamma_dnorm',
-                        conjugate_dinvwish_dmnorm = 'CRP_conjugate_dinvwish_dmnorm',
-                        conjugate_dwish_dmnorm = 'CRP_conjugate_dwish_dmnorm',
+                        conjugate_dnorm_dnorm_identity = 'CRP_conjugate_dnorm_dnorm',
+                        conjugate_dmnorm_dmnorm_identity = 'CRP_conjugate_dmnorm_dmnorm',
+                        conjugate_dnorm_dnorm_additive_nonidentity = 'CRP_conjugate_dnorm_dnorm_nonidentity',
+                        conjugate_dnorm_dnorm_multiplicative_nonidentity = 'CRP_conjugate_dnorm_dnorm_nonidentity',
+                        conjugate_dnorm_dnorm_linear_nonidentity = 'CRP_conjugate_dnorm_dnorm_nonidentity',
+                        conjugate_dinvgamma_dnorm_identity = 'CRP_conjugate_dinvgamma_dnorm',
+                        conjugate_dinvwish_dmnorm_identity = 'CRP_conjugate_dinvwish_dmnorm',
+                        conjugate_dwish_dmnorm_identity = 'CRP_conjugate_dwish_dmnorm',
                         conjugate_dnorm_invgamma_dnorm = 'CRP_conjugate_dnorm_invgamma_dnorm',
                         conjugate_dnorm_gamma_dnorm = 'CRP_conjugate_dnorm_gamma_dnorm',
                         conjugate_dmnorm_invwish_dmnorm = 'CRP_conjugate_dmnorm_invwish_dmnorm',
                         conjugate_dmnorm_wish_dmnorm = 'CRP_conjugate_dmnorm_wish_dmnorm',
-                        conjugate_dbeta_dbern  = 'CRP_conjugate_dbeta_dbern',
-                        conjugate_dbeta_dbin = 'CRP_conjugate_dbeta_dbin',
-                        conjugate_dbeta_dnegbin = 'CRP_conjugate_dbeta_dnegbin',
-                        conjugate_dgamma_dpois = 'CRP_conjugate_dgamma_dpois',
-                        conjugate_dgamma_dexp = 'CRP_conjugate_dgamma_dexp',
-                        conjugate_dgamma_dgamma = 'CRP_conjugate_dgamma_dgamma',
-                        conjugate_dgamma_dnorm = 'CRP_conjugate_dgamma_dnorm',
-                        conjugate_dgamma_dweib = 'CRP_conjugate_dgamma_dweib',
-                        conjugate_dgamma_dinvgamma = 'CRP_conjugate_dgamma_dinvgamma',
-                        conjugate_ddirch_dmulti = 'CRP_conjugate_ddirch_dmulti',
+                        conjugate_dbeta_dbern_identity  = 'CRP_conjugate_dbeta_dbern',
+                        conjugate_dbeta_dbin_identity = 'CRP_conjugate_dbeta_dbin',
+                        conjugate_dbeta_dnegbin_identity = 'CRP_conjugate_dbeta_dnegbin',
+                        conjugate_dgamma_dpois_identity = 'CRP_conjugate_dgamma_dpois',
+                        conjugate_dgamma_dexp_identity = 'CRP_conjugate_dgamma_dexp',
+                        conjugate_dgamma_dgamma_identity = 'CRP_conjugate_dgamma_dgamma',
+                        conjugate_dgamma_dnorm_identity = 'CRP_conjugate_dgamma_dnorm',
+                        conjugate_dgamma_dweib_identity = 'CRP_conjugate_dgamma_dweib',
+                        conjugate_dgamma_dinvgamma_identity = 'CRP_conjugate_dgamma_dinvgamma',
+                        conjugate_ddirch_dmulti_identity = 'CRP_conjugate_ddirch_dmulti',
                         'CRP_nonconjugate')  ## default if we don't have sampler set up for a conjugacy
 
 
@@ -1516,7 +1538,7 @@ sampler_CRP <- nimbleFunction(
             stop("sampler_CRP: cluster parameters must be independent across clusters.")
         if(!identical(sort(deps), sort(dataNodes)))
             warning("sampler_CRP: dependencies of cluster parameters include unexpected nodes: ",
-                    paste0(deps[!deps %in% dataNodes], collapse = ', '))
+                    paste0(deps[!deps %in% dataNodes], collapse = ', '), call. = FALSE)
     }
     
     identityLink <- TRUE
@@ -1838,7 +1860,7 @@ findClusterNodes <- function(model, target) {
             if(sum(all.vars(subExpr[[k]]) %in% modelVars)) { ## cases like mu[xi[i],eta[j]]
                 ## We are adding support for this case.
                 ## warning("findClusterNodes: multiple indexing variables in '", deparse(subExpr),
-                ##          "'. NIMBLE's CRP MCMC sampling not designed for this situation.")
+                ##          "'. NIMBLE's CRP MCMC sampling not designed for this situation.", call. = FALSE)
                 multipleStochIndexes[varIdx] <- TRUE
             }                
             k <- k+1
@@ -2080,7 +2102,8 @@ checkNormalInvGammaConjugacy <- function(model, clusterVarInfo, n, gammaDist = '
                sum(sapply(conjugacy_dnorm, '[[', 'type') == 'conjugate_dnorm') == length(exampleNodes1) &&
                sum(sapply(conjugacy_dinvgamma, '[[', 'type') == paste0('conjugate_', gammaDist)) == length(exampleNodes2) &&
                all(sapply(seq_along(conjugacy_dinvgamma), function(idx)
-                   sum(conjugacy_dinvgamma[[idx]]$control$dep_dnorm == exampleNodes1[idx]) == 1)))
+                   sum(conjugacy_dinvgamma[[idx]]$control$dep_dnorm_identity == exampleNodes1[idx]) + 
+                   sum(conjugacy_dinvgamma[[idx]]$control$dep_dnorm_multiplicative == exampleNodes1[idx]) == 1)))
                 conjugate <- TRUE
         }
         if(conjugate) {
@@ -2174,7 +2197,8 @@ checkNormalInvWishartConjugacy <- function(model, clusterVarInfo, n, wishartDist
                sum(sapply(conjugacy_dmnorm, '[[', 'type') == 'conjugate_dmnorm') == length(exampleNodes1) &&
                sum(sapply(conjugacy_dinvwish, '[[', 'type') == paste0('conjugate_', wishartDist)) == length(exampleNodes2) &&
                all(sapply(seq_along(conjugacy_dinvwish), function(idx)
-                   sum(conjugacy_dinvwish[[idx]]$control$dep_dmnorm == exampleNodes1[idx]) == 1)))
+                   sum(conjugacy_dinvwish[[idx]]$control$dep_dmnorm_identity == exampleNodes1[idx]) +
+                   sum(conjugacy_dinvwish[[idx]]$control$dep_dmnorm_multiplicativeScalar == exampleNodes1[idx]) == 1)))
                 conjugate <- TRUE
         }
         if(conjugate) {  
