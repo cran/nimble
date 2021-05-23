@@ -1,4 +1,4 @@
-3aed9a6e3e6d883c1f371f4bee65902d *DESCRIPTION
+77492d28f305d446f6bbd425fbee4e70 *DESCRIPTION
 44ff7251a9b22ccc2f450c23c1bd8a9c *INSTALL
 dcb1d9fb6532ca6dc5adc531ab24f88e *LICENSE
 d9e1ca597f071652b134a8b87133ff96 *NAMESPACE
@@ -24,7 +24,7 @@ c16a436e3df0a33ff9ebec38c9e3fab5 *R/MCMC_RJ.R
 91312b94d4b9e52a71c24546603c17a9 *R/MCMC_configuration.R
 0c8f8e82b290228ff6766f01e4f87026 *R/MCMC_conjugacy.R
 70f6131940496ec52a37384a93489559 *R/MCMC_run.R
-fa1e9b2bfe5dd9b9d262094b9387ce13 *R/MCMC_samplers.R
+bcac4e8dbdd07ca11a8763dd44c6f2c0 *R/MCMC_samplers.R
 905ed01ca6a3d26e9647c4b946f0113b *R/MCMC_utils.R
 ac849ff71c6a42e1faa4a9b4facc7da0 *R/NF_utils.R
 b7e69ccc70bd7c43fc56ef7e4d0b1fa9 *R/RCfunction_compile.R
@@ -121,7 +121,7 @@ cb4bd6a4283fa8994bdddff151b34e10 *inst/CppCode/nimbleGraph.cpp
 71fc99e350002c2c921b35e669f9e453 *inst/CppCode/predefinedNimbleLists.cpp
 f90db49645a2e072c6b689bea0215cfa *inst/CppCode/removeCustomizedMakeconf.R
 e18aa482c07df1e2462252f6d1a64f3f *inst/CppCode/smartPtrs.cpp
-a57faced705fbad5d5de065c9330d02e *inst/NEWS
+180b3c8bf6b356db29b8e0ffeead3585 *inst/NEWS
 f03548dfe6904008291d2ece0dd14fc8 *inst/classic-bugs/LICENSE
 13c2270040eac65a231947608c1b26fd *inst/classic-bugs/R/Rcheck.R
 d7aa853ae08a5bf1cebbc7aaeb63cd23 *inst/classic-bugs/R/bench.R
@@ -899,7 +899,7 @@ f831c4752ca772186ffdf0d2fa0cd11d *man/printErrors.Rd
 b5987a2a3fc6503cf8d0804724257144 *man/run.time.Rd
 cc2df8c3ad1e922b4ecec440e0f0f096 *man/runCrossValidate.Rd
 6b9a192a2b2a1dc00fea513a0bde9ef1 *man/runMCMC.Rd
-72ad05ba8c113d27074cb0773a43dd2f *man/samplers.Rd
+fde82c8bc81ae423f6a511fd4586e2dd *man/samplers.Rd
 96a8203241ce6eaacaec9fbe85cb867d *man/setAndCalculate.Rd
 93640aac1f4d49dbb025bf4f19bc4e07 *man/setAndCalculateOne.Rd
 f034933e76d0a12855304554a1814a50 *man/setSize.Rd
@@ -954,7 +954,7 @@ a13dbb48a0306b31c5ece97a14f5c8b6 *tests/testthat/test-getBound.R
 3184fe65ac73c1ec055d9691968bc7c2 *tests/testthat/test-macros.R
 6355c0d383294ce0ef074b6ef7e1f2b3 *tests/testthat/test-math.R
 314c13d549baff0eb29b36990ebbb221 *tests/testthat/test-mcem.R
-4a5ee27b39cefa0620b9e798aa311243 *tests/testthat/test-mcmc.R
+0207965574303f410a835816fd30ee96 *tests/testthat/test-mcmc.R
 19bab6d630668455c9dc2e5df9888233 *tests/testthat/test-mcmcrj.R
 8e75a9732584f23972012924667298cc *tests/testthat/test-misc.R
 e6b56c66d9891911cb16f5974a680676 *tests/testthat/test-modelValuesInterface.R
