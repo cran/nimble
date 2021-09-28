@@ -32,21 +32,14 @@ bool R_FINITE_VEC(double*, int);
 
 extern "C" {
 // BLAS/LAPACK routines
-  // not needed when #include "R_ext/lapack.h"
-  /*
-  int dgemm_(char*, char*, int*, int*, int*, double*, double*, int*, double*, int*, double*, double*, int*); 
-  int dtrmv_(char*, char*, char*, int*, double*, int*, double*, int*);
-  int dtrsv_(char*, char*, char*, int*, double*, int*, double*, int*);
-  int dtrsm_(char*, char*, char*, char*, int*, int*, double*, double*, int*, double*, int*);
-  int dtrmm_(char*, char*, char*, char*, int*, int*, double*, double*, int*, double*, int*);
-  int dpotrf_(char*, int*, double*, int*, int*);
-  */
-
+  // prototypes for dgemm_, dtrmv_, dtrsv_, dtrsm_, dtrmm_, dpotr_ not needed when #include "R_ext/lapack.h"
   // NIMBLE C wrappers called from R
   SEXP C_dmnorm_chol(SEXP, SEXP, SEXP, SEXP, SEXP); 
   SEXP C_rmnorm_chol(SEXP, SEXP, SEXP);
   SEXP C_dmvt_chol(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP); 
   SEXP C_rmvt_chol(SEXP, SEXP, SEXP, SEXP); 
+  SEXP C_dlkj_corr_cholesky(SEXP, SEXP, SEXP, SEXP); 
+  SEXP C_rlkj_corr_cholesky(SEXP, SEXP); 
   SEXP C_dwish_chol(SEXP, SEXP, SEXP, SEXP, SEXP);
   SEXP C_rwish_chol(SEXP, SEXP, SEXP);
   SEXP C_dinvwish_chol(SEXP, SEXP, SEXP, SEXP, SEXP);
@@ -96,6 +89,8 @@ double dwish_chol(double*, double*, double, int, double, int, int);
 void rwish_chol(double*, double*, double, int, double, int);
 double dinvwish_chol(double*, double*, double, int, double, int, int);
 void rinvwish_chol(double*, double*, double, int, double, int);
+double dlkj_corr_cholesky(double*, double, int, int);
+void rlkj_corr_cholesky(double*, double, int);
 
 double dinterval(double, double, double*, int, int);
 double rinterval(double, double*, int);

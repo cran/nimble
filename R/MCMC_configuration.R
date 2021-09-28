@@ -79,6 +79,7 @@ MCMCconf <- setRefClass(
         thin                = 'ANY',
         thin2               = 'ANY',
         enableWAIC          = 'ANY',
+        controlWAIC         = 'ANY',
         samplerConfs        = 'ANY',
         samplerExecutionOrder = 'ANY',
         controlDefaults     = 'ANY',
@@ -96,7 +97,7 @@ MCMCconf <- setRefClass(
             onlyRW = FALSE,
             onlySlice = FALSE,
             multivariateNodesAsScalars = getNimbleOption('MCMCmultivariateNodesAsScalars'),
-            enableWAIC = getNimbleOption('MCMCenableWAIC'),
+            enableWAIC = getNimbleOption('MCMCenableWAIC'), controlWAIC = list(),
             warnNoSamplerAssigned = TRUE,
             print = TRUE, ...) {
             '
@@ -135,7 +136,9 @@ onlySlice: A logical argument, with default value FALSE.  If specified as TRUE, 
 
 multivariateNodesAsScalars: A logical argument, with default value FALSE.  If specified as TRUE, then non-terminal multivariate stochastic nodes will have scalar samplers assigned to each of the scalar components of the multivariate node.  The default value of FALSE results in a single block sampler assigned to the entire multivariate node.  Note, multivariate nodes appearing in conjugate relationships will be assigned the corresponding conjugate sampler (provided useConjugacy == TRUE), regardless of the value of this argument.
 
-enableWAIC: A logical argument, specifying whether to enable WAIC calculations for the resulting MCMC algorithm.  Defaults to the value of nimbleOptions(\'MCMCenableWAIC\'), which in turn defaults to FALSE.  Setting nimbleOptions(\'MCMCenableWAIC\' = TRUE) will ensure that WAIC is enabled for all calls to configureMCMC and buildMCMC.
+enableWAIC: A logical argument, specifying whether to enable WAIC calculations for the resulting MCMC algorithm.  Defaults to the value of nimbleOptions(\'MCMCenableWAIC\'), which in turn defaults to FALSE.  Setting nimbleOptions(\'MCMCenableWAIC\' = TRUE) will ensure that WAIC is enabled for all calls to \`configureMCMC\` and \`buildMCMC\`.
+
+controlWAIC A named list of inputs that control the behavior of the WAIC calculation, passed as the \'control\' input to \'buildWAIC\'. See \'help(waic)\`.
 
 warnNoSamplerAssigned: A logical argument specifying whether to issue a warning when no sampler is assigned to a node, meaning there is no matching sampler assignment rule. Default is TRUE.
 
@@ -157,6 +160,7 @@ print: A logical argument specifying whether to print the montiors and samplers.
             thin  <<- thin
             thin2 <<- thin2
             enableWAIC <<- enableWAIC
+            controlWAIC <<- controlWAIC
             samplerConfs <<- list()
             samplerExecutionOrder <<- numeric()
             controlDefaults <<- list(...)
@@ -200,7 +204,7 @@ print: A logical argument specifying whether to print the montiors and samplers.
                     ## all potential (candidate) posterior predictive branch nodes:
                     candidateNodeIDs <- stochNonDataIDs[!model$isEndNode(stochNonDataIDs)]
                     dataNodeIDs <- model$getNodeNames(dataOnly = TRUE, returnType = 'ids')
-                    dataNodeParentIDs <- model$expandNodeNames(getParentNodes(dataNodeIDs, model, stochOnly = TRUE), returnType = 'ids')
+                    dataNodeParentIDs <- model$expandNodeNames(model$getParents(dataNodeIDs, stochOnly = TRUE), returnType = 'ids')
                     ## remove from candidate nodes all direct parents of data nodes:
                     candidateNodeIDs <- setdiff(candidateNodeIDs, dataNodeParentIDs)
                     nCandidate <- length(candidateNodeIDs)
@@ -319,13 +323,14 @@ print: A logical argument specifying whether to print the montiors and samplers.
                                 addConjugateSampler(conjugacyResult = conjugacyResult,
                                                     dynamicallyIndexed = model$modelDef$varInfo[[model$getVarNames(nodes=node)]]$anyDynamicallyIndexed);     next }
                         }
-                        if(nodeDist == 'dmulti')       { addSampler(target = node, type = 'RW_multinomial');     next }
-                        if(nodeDist == 'ddirch')       { addSampler(target = node, type = 'RW_dirichlet');       next }
-                        if(nodeDist == 'dwish')        { addSampler(target = node, type = 'RW_wishart');         next }
-                        if(nodeDist == 'dinvwish')     { addSampler(target = node, type = 'RW_wishart');         next }
-                        if(nodeDist == 'dcar_normal')  { addSampler(target = node, type = 'CAR_normal');         next }
-                        if(nodeDist == 'dcar_proper')  { addSampler(target = node, type = 'CAR_proper');         next }
-                        if(nodeDist == 'dCRP')         {
+                        if(nodeDist == 'dmulti')              { addSampler(target = node, type = 'RW_multinomial');     next }
+                        if(nodeDist == 'ddirch')              { addSampler(target = node, type = 'RW_dirichlet');       next }
+                        if(nodeDist == 'dwish')               { addSampler(target = node, type = 'RW_wishart');         next }
+                        if(nodeDist == 'dinvwish')            { addSampler(target = node, type = 'RW_wishart');         next }
+                        if(nodeDist == 'dlkj_corr_cholesky')  { addSampler(target = node, type = 'RW_block_lkj_corr_cholesky');  next }
+                        if(nodeDist == 'dcar_normal')         { addSampler(target = node, type = 'CAR_normal');         next }
+                        if(nodeDist == 'dcar_proper')         { addSampler(target = node, type = 'CAR_proper');         next }
+                        if(nodeDist == 'dCRP')                {
                             numCRPnodes <- numCRPnodes + 1
                             clusterNodeInfo[[numCRPnodes]] <- findClusterNodes(model, node)
                             addSampler(target = node, type = 'CRP', control = list(checkConjugacy = useConjugacy,
@@ -837,8 +842,8 @@ Details: See the initialize() function
             }
             vars <- unique(removeIndexing(vars))
             nl_checkVarNamesInModel(model, vars)
-            if(ind == 1)     monitors  <<- unique(c(monitors,  vars))
-            if(ind == 2)     monitors2 <<- unique(c(monitors2, vars))
+            if(ind == 1)     monitors  <<- sort(unique(c(monitors,  vars)))
+            if(ind == 2)     monitors2 <<- sort(unique(c(monitors2, vars)))
             if(print) printMonitors()
             return(invisible(NULL))
         },
@@ -970,17 +975,6 @@ Details: See the initialize() function
             return(invisible(NULL))
         },
 
-        setEnableWAIC = function(waic = TRUE) {
-            '
-Sets the value of enableWAIC.
-
-Arguments:
-
-waic: A logical argument, indicating whether to enable WAIC calculations in the resulting MCMC algorithm (default TRUE).
-'
-            enableWAIC <<- as.logical(waic)
-        },
-        
         getMvSamplesConf  = function(ind = 1){
             
             if(isMvSamplesReady(ind) == TRUE) {
@@ -1054,7 +1048,8 @@ waic: A logical argument, indicating whether to enable WAIC calculations in the 
 #'@param onlySlice A logical argument, with default value FALSE.  If specified as TRUE, then a slice sampler is assigned for all non-terminal nodes. Terminal nodes are still assigned a posterior_predictive sampler.
 #'@param multivariateNodesAsScalars A logical argument, with default value FALSE.  If specified as TRUE, then non-terminal multivariate stochastic nodes will have scalar samplers assigned to each of the scalar components of the multivariate node.  The default value of FALSE results in a single block sampler assigned to the entire multivariate node.  Note, multivariate nodes appearing in conjugate relationships will be assigned the corresponding conjugate sampler (provided \code{useConjugacy == TRUE}), regardless of the value of this argument.
 #' @param enableWAIC A logical argument, specifying whether to enable WAIC calculations for the resulting MCMC algorithm.  Defaults to the value of \code{nimbleOptions('MCMCenableWAIC')}, which in turn defaults to FALSE.  Setting \code{nimbleOptions('enableWAIC' = TRUE)} will ensure that WAIC is enabled for all calls to \code{\link{configureMCMC}} and \code{\link{buildMCMC}}.
-#'@param warnNoSamplerAssigned A logical argument, with default value TRUE.  This specifies whether to issue a warning when no sampler is assigned to a node, meaning there is no matching sampler assignment rule.
+#' @param controlWAIC A named list of inputs that control the behavior of the WAIC calculation. See \code{help(waic)}.
+#' @param warnNoSamplerAssigned A logical argument, with default value TRUE.  This specifies whether to issue a warning when no sampler is assigned to a node, meaning there is no matching sampler assignment rule.
 #'@param print A logical argument, specifying whether to print the ordered list of default samplers.
 #'@param autoBlock A logical argument specifying whether to use an automated blocking procedure to determine blocks of model nodes for joint sampling.  If TRUE, an MCMC configuration object will be created and returned corresponding to the results of the automated parameter blocking.  Default value is FALSE.
 #'@param oldConf An optional MCMCconf object to modify rather than creating a new MCMCconf from scratch
@@ -1068,7 +1063,7 @@ configureMCMC <- function(model, nodes, control = list(),
                           useConjugacy = getNimbleOption('MCMCuseConjugacy'),
                           onlyRW = FALSE, onlySlice = FALSE,
                           multivariateNodesAsScalars = getNimbleOption('MCMCmultivariateNodesAsScalars'),
-                          enableWAIC = getNimbleOption('MCMCenableWAIC'),
+                          enableWAIC = getNimbleOption('MCMCenableWAIC'), controlWAIC = list(),
                           print = getNimbleOption('verbose'),
                           autoBlock = FALSE, oldConf,
                           ## samplerAssignmentRules system deprecated Nov 2020 -DT
@@ -1095,7 +1090,7 @@ configureMCMC <- function(model, nodes, control = list(),
                          useConjugacy = useConjugacy,
                          onlyRW = onlyRW, onlySlice = onlySlice,
                          multivariateNodesAsScalars = multivariateNodesAsScalars,
-                         enableWAIC = enableWAIC,
+                         enableWAIC = enableWAIC, controlWAIC = controlWAIC,
                          warnNoSamplerAssigned = warnNoSamplerAssigned,
                          print = print, ...)
     return(invisible(thisConf))

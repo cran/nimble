@@ -2,35 +2,36 @@
 % Please edit documentation in R/BUGS_model.R
 \docType{class}
 \name{modelBaseClass-class}
-\alias{[[,modelBaseClass-method}
-\alias{[[<-,modelBaseClass-method}
-\alias{checkConjugacy}
-\alias{expandNodeNames}
-\alias{getCode}
-\alias{getDependencies}
-\alias{getDependenciesList}
-\alias{getDimension}
-\alias{getDistribution}
-\alias{getDownstream}
-\alias{getNodeNames}
-\alias{getVarNames}
-\alias{initializeInfo}
-\alias{isBinary}
-\alias{isData}
-\alias{isDeterm}
-\alias{isDiscrete}
-\alias{isEndNode}
-\alias{isMultivariate}
-\alias{isStoch}
-\alias{isTruncated}
-\alias{isUnivariate}
-\alias{modelBaseClass}
 \alias{modelBaseClass-class}
-\alias{newModel}
+\alias{modelBaseClass}
+\alias{getVarNames}
+\alias{getNodeNames}
+\alias{topologicallySortNodes}
 \alias{resetData}
 \alias{setData}
+\alias{isData}
+\alias{isEndNode}
+\alias{getDistribution}
+\alias{isDiscrete}
+\alias{isBinary}
+\alias{isStoch}
+\alias{isDeterm}
+\alias{isTruncated}
+\alias{isUnivariate}
+\alias{isMultivariate}
+\alias{getDimension}
+\alias{getDependencies}
+\alias{getDependenciesList}
+\alias{getDownstream}
+\alias{expandNodeNames}
 \alias{setInits}
-\alias{topologicallySortNodes}
+\alias{checkConjugacy}
+\alias{getCode}
+\alias{newModel}
+\alias{getParents}
+\alias{[[,modelBaseClass-method}
+\alias{[[<-,modelBaseClass-method}
+\alias{initializeInfo}
 \title{Class \code{modelBaseClass}}
 \description{
 This class underlies all NIMBLE model objects: both R model objects created from the return value of nimbleModel(), and compiled model objects.
@@ -57,8 +58,14 @@ nodeVector: A character vector specifying one or more node or variable names.  I
 
 Details: The return value is a named list, with an element corresponding to each conjugate node.  The list names are the conjugate node names, and list elements are the control list arguments required by the corresponding MCMC conjugate sampler functions.  If no model nodes are conjugate, an empty list is returned.}
 
-\item{\code{expandNodeNames(nodes, env = parent.frame(), returnScalarComponents = FALSE,
-  returnType = "names", sort = FALSE, unique = TRUE)}}{Takes a vector of names of nodes or variables and returns the unique and expanded names in the model, i.e. 'x' expands to 'x[1]', 'x[2]', ...
+\item{\code{expandNodeNames(
+  nodes,
+  env = parent.frame(),
+  returnScalarComponents = FALSE,
+  returnType = "names",
+  sort = FALSE,
+  unique = TRUE
+)}}{Takes a vector of names of nodes or variables and returns the unique and expanded names in the model, i.e. 'x' expands to 'x[1]', 'x[2]', ...
 
 Arguments:
 
@@ -76,9 +83,15 @@ unique: should names be the unique names or should original ordering of nodes (a
 
 \item{\code{getCode()}}{Return the code for a model after processing if-then-else statements, expanding macros, and replacing some keywords (e.g. nimStep for step) to avoid R ambiguity.}
 
-\item{\code{getConditionallyIndependentSets(nodes, givenNodes, omit = integer(),
-  inputType = c("latent", "param", "data"), stochOnly = TRUE,
-  returnType = "names", returnScalarComponents = FALSE)}}{Get a list of conditionally independent sets of nodes in a nimble model.
+\item{\code{getConditionallyIndependentSets(
+  nodes,
+  givenNodes,
+  omit = integer(),
+  inputType = c("latent", "param", "data"),
+  stochOnly = TRUE,
+  returnType = "names",
+  returnScalarComponents = FALSE
+)}}{Get a list of conditionally independent sets of nodes in a nimble model.
 
 Conditionally independent sets of nodes are typically groups of latent states whose joint conditional probability (density) will not change even if any other non-fixed node is changed.  Default fixed nodes are data nodes and parameter nodes (with no parent nodes), but this can be controlled.
 
@@ -106,10 +119,19 @@ There is a non-exported function `nimble:::testConditionallyIndependentSets(mode
 
 Return value: List of nodes that are in conditionally independent sets.  Within each set, nodes are returned in topologically sorted order.  The sets themselves are returned in topologically sorted order of their first nodes.}
 
-\item{\code{getDependencies(nodes, omit = character(), self = TRUE,
-  determOnly = FALSE, stochOnly = FALSE, includeData = TRUE,
-  dataOnly = FALSE, includeRHSonly = FALSE, downstream = FALSE,
-  returnType = "names", returnScalarComponents = FALSE)}}{Returns a character vector of the nodes dependent upon the input argument nodes, sorted topologically according to the model graph. In the genealogical metaphor for a graphical model, this function returns the "children" of the input nodes.  In the river network metaphor, it returns downstream nodes. By default, the returned nodes include the input nodes, include both deterministic and stochastic nodes, and stop at stochastic nodes. Aditional input arguments provide flexibility in the values returned.
+\item{\code{getDependencies(
+  nodes,
+  omit = character(),
+  self = TRUE,
+  determOnly = FALSE,
+  stochOnly = FALSE,
+  includeData = TRUE,
+  dataOnly = FALSE,
+  includeRHSonly = FALSE,
+  downstream = FALSE,
+  returnType = "names",
+  returnScalarComponents = FALSE
+)}}{Returns a character vector of the nodes dependent upon the input argument nodes, sorted topologically according to the model graph. In the genealogical metaphor for a graphical model, this function returns the "children" of the input nodes.  In the river network metaphor, it returns downstream nodes. By default, the returned nodes include the input nodes, include both deterministic and stochastic nodes, and stop at stochastic nodes. Additional input arguments provide flexibility in the values returned.
 
 Arguments:
 
@@ -147,8 +169,12 @@ sort: If TRUE (default), each list element is returned in topologically sorted o
 
 Details: This provides a fairly raw representation of the graph (model) structure that may be useful for inspecting what NIMBLE has created from model code.}
 
-\item{\code{getDimension(node, params = NULL, valueOnly = is.null(params) &&
-  !includeParams, includeParams = !is.null(params))}}{Determines the dimension of the value and/or parameters of the node
+\item{\code{getDimension(
+  node,
+  params = NULL,
+  valueOnly = is.null(params) && !includeParams,
+  includeParams = !is.null(params)
+)}}{Determines the dimension of the value and/or parameters of the node
 
 Arguments:
 
@@ -176,10 +202,18 @@ Details: See documentation for member method getDependencies.}
 
 \item{\code{getLogProb(nodes)}}{See `help(getLogProb)`}
 
-\item{\code{getNodeNames(determOnly = FALSE, stochOnly = FALSE, includeData = TRUE,
-  dataOnly = FALSE, includeRHSonly = FALSE, topOnly = FALSE,
-  latentOnly = FALSE, endOnly = FALSE, returnType = "names",
-  returnScalarComponents = FALSE)}}{Returns a character vector of all node names in the model, in topologically sorted order.  A variety of logical arguments allow for flexible subsetting of all model nodes.
+\item{\code{getNodeNames(
+  determOnly = FALSE,
+  stochOnly = FALSE,
+  includeData = TRUE,
+  dataOnly = FALSE,
+  includeRHSonly = FALSE,
+  topOnly = FALSE,
+  latentOnly = FALSE,
+  endOnly = FALSE,
+  returnType = "names",
+  returnScalarComponents = FALSE
+)}}{Returns a character vector of all node names in the model, in topologically sorted order.  A variety of logical arguments allow for flexible subsetting of all model nodes.
 
 Arguments:
 
@@ -207,10 +241,20 @@ Details: Multiple logical input arguments may be used simultaneously.  For examp
 
 \item{\code{getParam(node, param)}}{See `help(getParam)`                                                                                                                                                                                                                               }
 
-\item{\code{getParents(nodes, omit = character(), self = FALSE, determOnly = FALSE,
-  stochOnly = FALSE, includeData = TRUE, dataOnly = FALSE,
-  includeRHSonly = FALSE, upstream = FALSE, immediateOnly = FALSE,
-  returnType = "names", returnScalarComponents = FALSE)}}{ Returns a character vector of the nodes on which the input nodes depend, sorted topologically according to the model graph, by default recursing and stopping at stochastic parent nodes.  In the genealogical metaphor for a graphical model, this function returns the "parents" of the input nodes. In the river network metaphor, it returns upstream nodes.  By default, the returned nodes omit the input nodes, include only stochastic nodes, and stop at stochastic nodes.  Aditional input arguments provide flexibility in the values returned.
+\item{\code{getParents(
+  nodes,
+  omit = character(),
+  self = FALSE,
+  determOnly = FALSE,
+  stochOnly = FALSE,
+  includeData = TRUE,
+  dataOnly = FALSE,
+  includeRHSonly = FALSE,
+  upstream = FALSE,
+  immediateOnly = FALSE,
+  returnType = "names",
+  returnScalarComponents = FALSE
+)}}{ Returns a character vector of the nodes on which the input nodes depend, sorted topologically according to the model graph, by default recursing and stopping at stochastic parent nodes.  In the genealogical metaphor for a graphical model, this function returns the "parents" of the input nodes. In the river network metaphor, it returns upstream nodes.  By default, the returned nodes omit the input nodes. Additional input arguments provide flexibility in the values returned.
 
 Arguments:
 
@@ -222,7 +266,7 @@ self: Logical argument specifying whether to include the input argument nodes in
 
 determOnly: Logical argument specifying whether to return only deterministic nodes.  Default is FALSE.
 
-stochOnly: Logical argument specifying whether to return only stochastic nodes.  Default is TRUE.  If both determOnly and stochOnly are TRUE, no nodes will be returned.
+stochOnly: Logical argument specifying whether to return only stochastic nodes.  Default is FALSE.  If both determOnly and stochOnly are TRUE, no nodes will be returned.
 
 includeData: Logical argument specifying whether to include 'data' nodes (set via nimbleModel or the setData method).  Default is TRUE.
 
@@ -274,7 +318,7 @@ Arguments:
 
 nodes: A character vector of node or variable names.
 
-Details: The variable or node names specified is expanded into a vector of model node names.  A logical vector is returned, indicating whether each model node has been flagged as containing 'data'.}
+Details: The variable or node names specified is expanded into a vector of model node names. A logical vector is returned, indicating whether each model node has been flagged as containing 'data'. Multivariate nodes for which any elements are flagged as containing 'data' will be assigned a value of TRUE.}
 
 \item{\code{isDeterm(nodes)}}{Determines whether one or more nodes are deterministic
 
@@ -332,15 +376,20 @@ nodes: A character vector specifying one or more node or variable names.
 
 Details: The return value is a character vector with an element for each node indicated in the input. Note that variable names are expanded to their constituent nodes names, so the length of the output may be longer than that of the input}
 
-\item{\code{newModel(data = NULL, inits = NULL, modelName = character(),
-  replicate = FALSE, check = getNimbleOption("checkModel"),
-  calculate = TRUE)}}{Returns a new R model object, with the same model definiton (as defined from the original model code) as the existing model object.
+\item{\code{newModel(
+  data = NULL,
+  inits = NULL,
+  modelName = character(),
+  replicate = FALSE,
+  check = getNimbleOption("checkModel"),
+  calculate = TRUE
+)}}{Returns a new R model object, with the same model definiton (as defined from the original model code) as the existing model object.
 
 Arguments:
 
 data: A named list specifying data nodes and values, for use in the newly returned model.  If not provided, the data argument from the creation of the original R model object will be used.
 
-inits: A named list specifying initial values, for use in the newly returned model.  If not provided, the inits argument from the creation of the original R model object will be used.
+inits: A named list specifying initial valuse, for use in the newly returned model.  If not provided, the inits argument from the creation of the original R model object will be used.
 
 modelName: An optional character string, used to set the internal name of the model object.  If provided, this name will propagate throughout the generated C++ code, serving to improve readability.
 
@@ -360,7 +409,7 @@ Arguments:
 
 ...:  Arguments may be provided as named elements with numeric values or as character names of model variables.  These may be provided in a single list, a single character vector, or as multiple arguments.  When a named element with a numeric value is provided, the size and dimension must match the corresponding model variable.  This value will be copied to the model variable and any non-NA elements will be marked as data.  When a character name is provided, the value of that variable in the model is not changed but any currently non-NA values are marked as data.  Examples: setData('x', y = 1:10) will mark both x and y as data and will set the value of y to 1:10.  setData(list('x', y = 1:10)) is equivalent.  setData(c('x','y')) or setData('x','y') will mark both x and y as data.
 
-Details: If a provided value (or the current value in the model when only a name is specified) contains some NA values, then the model nodes corresponding to these NAs will not have their value set, and will not be designated as 'data'.  Only model nodes corresponding to numeric values in the argument list elements will be designated as data.  Designating a deterministic model node as 'data' will result in an error.  Designating part of a multivariate node as 'data' and part as non-data (NA) will result in an error; multivariate nodes must be entirely data, or entirely non-data.}
+Details: If a provided value (or the current value in the model when only a name is specified) contains some NA values, then the model nodes corresponding to these NAs will not have their value set, and will not be designated as 'data'.  Only model nodes corresponding to numeric values in the argument list elements will be designated as data.  Designating a deterministic model node as 'data' will result in an error.  Designating part of a multivariate node as 'data' and part as non-data (NA) is allowed, but 'isData()' will report such a node as being 'data', calculations with the node will generally return NA, and MCMC samplers will not be assigned to such nodes.}
 
 \item{\code{setInits(inits)}}{Sets initial values (or more generally, any named list of value elements) into the model
 
@@ -380,6 +429,7 @@ returnType: character vector indicating return type. Choices are "names" or "ids
 
 Details: This function merely reorders its input argument.  This may be important prior to calls such as model$simulate(nodes) or model$calculate(nodes), to enforce that the operation is performed in topological order.}
 }}
+
 \examples{
 code <- nimbleCode({
     mu ~ dnorm(0, 1)
@@ -393,10 +443,9 @@ Rmodel$resetData()
 Rmodel$setData(list(x = c(1.2, NA)))   ## flags only 'x[1]' node as data
 Rmodel$isData(c('mu', 'x[1]', 'x[2]'))   ## returns c(FALSE, TRUE, FALSE)
 }
-\author{
-Daniel Turek
-}
 \seealso{
 \code{\link{initializeModel}}
 }
-
+\author{
+Daniel Turek
+}

@@ -109,7 +109,7 @@ eigenizeCalls <- c( ## component-wise unarys valid for either Eigen array or mat
 )
 
 eigenizeCallsBeforeRecursing <- c( ## These cannot be calls that trigger aliasRisk. getParam always triggers an intermediate so it should never need handling here
-    makeCallList(c('size','nimArr_dmnorm_chol', 'nimArr_dmvt_chol', 'nimArr_dwish_chol', 'nimArr_dinvwish_chol', 'nimArr_dcar_normal', 'nimArr_dcar_proper', 'nimArr_ddirch','calculate','calculateDiff','getLogProb', 'getParam', 'getBound', 'getNodeFunctionIndexedInfo', 'concatenateTemp', 'MAKE_FIXED_VECTOR', 'hardCodedVectorInitializer'), 'eigenize_doNotRecurse'),
+    makeCallList(c('size','nimArr_dmnorm_chol', 'nimArr_dmvt_chol', 'nimArr_dlkj_corr_cholesky', 'nimArr_dwish_chol', 'nimArr_dinvwish_chol', 'nimArr_dcar_normal', 'nimArr_dcar_proper', 'nimArr_ddirch','calculate','calculateDiff','getLogProb', 'getParam', 'getBound', 'getNodeFunctionIndexedInfo', 'concatenateTemp', 'MAKE_FIXED_VECTOR', 'hardCodedVectorInitializer'), 'eigenize_doNotRecurse'),
     list(coeffSetter = 'eigenize_coeffSetter',
          nfVar = 'eigenize_nfVar',
          chainedCall = 'eigenize_chainedCall'),
@@ -479,9 +479,15 @@ eigenCast <- function(expr, argIndex, newType) {
 eigenize_assign_before_recurse <- function(code, symTab, typeEnv, workEnv) {
     setupExprs <- list()
     if(length(code$args) != 2) stop(exprClassProcessingErrorMsg(code, 'There is an assignment without 2 arguments.'), call. = FALSE)
+
+
     workEnv$OnLHSnow <- TRUE
     setupExprs <- c(setupExprs, exprClasses_eigenize(code$args[[1]], symTab, typeEnv, workEnv))
     workEnv$OnLHSnow <- NULL ## allows workEnv[['OnLHSnow']] to be NULL if is does not exist or if set to NULL
+
+    promoteArgTypes(code)
+    if(!is.null(code$type)) code$type <- code$args[[2]]$type
+
     changeToFill <- FALSE
     if(inherits(code$args[[2]], 'exprClass')) {
         setupExprs <- c(setupExprs, exprClasses_eigenize(code$args[[2]], symTab, typeEnv, workEnv))
@@ -848,7 +854,13 @@ eigenizeName <- function(code, symTab, typeEnv, workEnv) {
     }
     
     if(!identical(as.integer(targetSym$nDim), as.integer(code$nDim))) { writeLines('found a case where !identical(targetSym$nDim, code$nDim)'); browser() }
-    if(!identical(targetSym$type, code$type)) { writeLines('found a case where !identical(targetSym$type, code$type)'); browser() }
+    if(!identical(targetSym$type, code$type)) {
+      if(!is.null(workEnv[['OnLHSnow']])) { ## This is a hack for a case like <Double vector> <- <Expression returning Integer Vector>
+        code$type <- targetSym$type         ## This is done only when we are processing the LHS name
+      } else {
+        writeLines('found a case where !identical(targetSym$type, code$type)'); browser()
+      }
+    }
     if(!identical(targetSym$name, code$name)) { writeLines('found a case where !identical(targetSym$name, code$name)'); browser() }
     targetTypeSizeExprs <- code$sizeExprs
 
