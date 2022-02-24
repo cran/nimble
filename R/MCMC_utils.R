@@ -371,7 +371,6 @@ mcmc_checkWAICmonitors_conditional <- function(model, monitors, dataNodes) {
                     "  Currently, the following parameters are not monitored: ",
                     paste0(badVars, collapse = ", ")))
     }
-    message('Monitored nodes are valid for WAIC.')
 }
 
 ## Used through version 0.10.0 and likely to be used in some form once we re-introduce mWAIC
@@ -402,7 +401,7 @@ mcmc_checkWAICmonitors <- function(model, monitors, dataNodes) {
         thisVars <- model$getVarNames(nodes = nextNodes)
         thisVars <- thisVars[!(thisVars %in% monitors)]
     }
-    message('Monitored nodes are valid for WAIC')
+    messageIfVerbose('  [Note] Monitored nodes are valid for WAIC.')
 }
 
 

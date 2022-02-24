@@ -305,7 +305,7 @@ sampler_RW <- nimbleFunction(
             if(saveMCMChistory) {
                 return(scaleHistory)
             } else {
-                print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC")
+                print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC.")
                 return(numeric(1, 0))
             }
         },          
@@ -314,7 +314,7 @@ sampler_RW <- nimbleFunction(
             if(saveMCMChistory) {
                 return(acceptanceHistory)
             } else {
-                print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC")
+                print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC.")
                 return(numeric(1, 0))
             }
         },
@@ -475,17 +475,17 @@ sampler_RW_block <- nimbleFunction(
             }
         },
         getScaleHistory = function() {  ## scaleHistory
-            if(!saveMCMChistory)   print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC")
+            if(!saveMCMChistory)   print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC.")
             returnType(double(1))
             return(scaleHistory)
         },          
         getAcceptanceHistory = function() {  ## scaleHistory
             returnType(double(1))
-            if(!saveMCMChistory)   print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC")
+            if(!saveMCMChistory)   print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC.")
             return(acceptanceHistory)
         },                  
         getPropCovHistory = function() { ## scaleHistory
-            if(!saveMCMChistory | d > 10)   print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC and note that to reduce memory use we only save the proposal covariance history for parameter vectors of length 10 or less")
+            if(!saveMCMChistory | d > 10)   print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC and note that to reduce memory use we only save the proposal covariance history for parameter vectors of length 10 or less.")
             returnType(double(3))
             return(propCovHistory)
         },
@@ -683,7 +683,7 @@ sampler_slice <- nimbleFunction(
             if(saveMCMChistory) {
                 return(widthHistory)
             } else {
-                print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC")
+                print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC.")
                 return(numeric(1, 0))
             }
        },
@@ -1573,9 +1573,10 @@ sampler_RW_lkj_corr_cholesky <- nimbleFunction(
         if(scaleOriginal < 0)
             stop('Cannot use RW_lkj_corr_cholesky sampler with scale control parameter less than 0.')
         ## adaptation objects
+        if(nTheta == 1) nTheta <- 2
         scaleVec            <- rep(scaleOriginal, nTheta)
         timesRan            <- 0
-        timesAcceptedVec    <- rep(nTheta, 0)
+        timesAcceptedVec    <- rep(0, nTheta)
         timesAdapted        <- 0
         optimalAR           <- 0.44
         ##
@@ -1749,7 +1750,7 @@ sampler_RW_block_lkj_corr_cholesky <- nimbleFunction(
 
         dist <- model$getDistribution(target)
         if(dist != 'dlkj_corr_cholesky') stop('RW_block_lkj_corr_cholesky sampler can only be used with the dlkj_corr_cholesky distribution.')
-        if(d < 2)                        stop('RW_block_lkj_corr_cholesky sampler requires target node dimension to be at least 2x2.')
+        if(d < 3)                        stop('RW_block_lkj_corr_cholesky sampler requires target node dimension to be at least 3x3.')
         if(adaptFactorExponent < 0)      stop('Cannot use RW_block_lkj_corr_cholesky sampler with adaptFactorExponent control parameter less than 0.')
 
     },
@@ -1871,17 +1872,17 @@ sampler_RW_block_lkj_corr_cholesky <- nimbleFunction(
             }
         },
         getScaleHistory = function() {  ## scaleHistory
-            if(!saveMCMChistory)   print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC")
+            if(!saveMCMChistory)   print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC.")
             returnType(double(1))
             return(scaleHistory)
         },          
         getAcceptanceHistory = function() {  ## scaleHistory
             returnType(double(1))
-            if(!saveMCMChistory)   print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC")
+            if(!saveMCMChistory)   print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC.")
             return(acceptanceHistory)
         },                  
         getPropCovHistory = function() { ## scaleHistory
-            if(!saveMCMChistory | d > 10)   print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC and note that to reduce memory use we only save the proposal covariance history for parameter vectors of length 10 or less")
+            if(!saveMCMChistory | d > 10)   print("Please set 'nimbleOptions(MCMCsaveHistory = TRUE)' before building the MCMC and note that to reduce memory use we only save the proposal covariance history for parameter vectors of length 10 or less.")
             returnType(double(3))
             return(propCovHistory)
         },
@@ -2284,6 +2285,7 @@ sampler_CAR_proper <- nimbleFunction(
 #' \item adaptFactorExponent. Exponent controling the rate of decay of the scale adaptation factor.  See Shaby and Wells, 2011, for details. (default = 0.8)
 #' \item scale. The initial value of the scalar multiplier for propCov.  If adaptive = FALSE, scale will never change. (default = 1)
 #' \item propCov. The initial covariance matrix for the multivariate normal proposal distribution.  This element may be equal to the character string 'identity', in which case the identity matrix of the appropriate dimension will be used for the initial proposal covariance matrix. (default = 'identity')
+#' \item tries. The number of times this sampler will repeatedly operate on each MCMC iteration.  Each try consists of a new proposed transition and an accept/reject decision of this proposal.  Specifying tries > 1 can help increase the overall sampler acceptance rate and therefore chain mixing. (default = 1)
 #' }
 #'
 #' Note that modifying elements of the control list may greatly affect the performance of this sampler. In particular, the sampler can take a long time to find a good proposal covariance when the elements being sampled are not on the same scale. We recommend providing an informed value for \code{propCov} in this case (possibly simply a diagonal matrix that approximates the relative scales), as well as possibly providing a value of \code{scale} that errs on the side of being too small. You may also consider decreasing \code{adaptFactorExponent} and/or \code{adaptInterval}, as doing so has greatly improved performance in some cases. 

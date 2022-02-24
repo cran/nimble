@@ -367,7 +367,7 @@ modelDefClass$methods(assignDimensions = function(dimensions, initsList, dataLis
         if(!(length(initDim) == 1 && initDim == 1)) {  # i.e., non-scalar inits; 1-length vectors treated as scalars and not passed along as dimension info to avoid conflicts between scalars and one-length vectors/matrices/arrays in various places
             if(initName %in% names(dL)) {
                 if(!identical(as.numeric(dL[[initName]]), as.numeric(initDim))) {
-                    warning('  [Note] Inconsistent dimensions between inits and dimensions arguments: ', initName, '; ignoring dimensions in inits.')
+                    messageIfVerbose('  [Warning] Inconsistent dimensions between inits and dimensions arguments: ', initName, '; ignoring dimensions in inits.')
                 }
             } else {
                 dL[[initName]] <- initDim
@@ -494,8 +494,8 @@ checkUserDefinedDistribution <- function(code, userEnv) {
         dist <- as.character(code[[3]][[2]][[1]])
     if(!dist %in% distributions$namesVector)
         if(!exists('distributions', nimbleUserNamespace, inherits = FALSE) || !dist %in% nimbleUserNamespace$distributions$namesVector) {
+            messageIfVerbose("  [Note] Registering '", dist, "' as a distribution based on its use in BUGS code. If you make changes to the nimbleFunctions for the distribution, you must call 'deregisterDistributions' before using the distribution in BUGS code for those changes to take effect.")
             registerDistributions(dist, userEnv)
-            cat("NIMBLE has registered ", dist, " as a distribution based on its use in BUGS code. Note that if you make changes to the nimbleFunctions for the distribution, you must call 'deregisterDistributions' before using the distribution in BUGS code for those changes to take effect.\n", sep = "") 
         }
 }
         
@@ -872,7 +872,7 @@ modelDefClass$methods(reparameterizeDists = function() {
                                         # insert altParams and bounds into code
         }
         names(boundExprs)[names(boundExprs) %in% c('lower', 'upper')] <- paste0(names(boundExprs)[names(boundExprs) %in% c('lower', 'upper')], '_')
-        newValueExpr <- as.call(c(as.list(newValueExpr), nonReqdArgExprs, boundExprs))
+        newValueExpr <- as.call(c(as.list(newValueExpr), boundExprs, nonReqdArgExprs))
         newCode <- BUGSdecl$code
         newCode[[3]] <- newValueExpr
         
@@ -1000,9 +1000,11 @@ replaceConstantsRecurse <- function(code, constEnv, constNames, do.eval = TRUE) 
                     # if(callChar != ':') {
                     if(!is.vectorized(code)) {
                         if(is.null(neverReplaceable[[callChar]])) {
-                            if(inherits(get(callChar, constEnv),'function')) {
-                                testcode <- as.numeric(eval(code, constEnv))
-                                if(length(testcode) == 1) code <- testcode
+                            if(isTRUE(callChar %in% nimblePreevaluationFunctionNames)) {
+                                if(inherits(get(callChar, constEnv),'function')) {
+                                    testcode <- as.numeric(eval(code, constEnv))
+                                    if(length(testcode) == 1) code <- testcode
+                                }
                             }
                         }
                     }
@@ -1048,7 +1050,9 @@ modelDefClass$methods(liftExpressionArgs = function() {
                 if(!isExprLiftable(paramExpr, types[[paramName]]))    next     ## if this param isn't an expression, go ahead to next parameter
                 requireNewAndUniqueDecl <- any(contexts[[BUGSdecl$contextID]]$indexVarNames %in% all.vars(paramExpr))
                 uniquePiece <- if(requireNewAndUniqueDecl) paste0("_L", BUGSdecl$sourceLineNumber) else ""
-                newNodeNameExpr <- as.name(paste0('lifted_', Rname2CppName(paramExpr, colonsOK = TRUE), uniquePiece))   ## create the name of the new node ##nameMashup
+                ## Pass through Rname2CppName twice so that long names truncated if adding 'lifted_' puts them over nchar limit
+                newNodeNameExpr <- as.name(paste0(Rname2CppName(paste0('lifted_',
+                                                  Rname2CppName(paramExpr, colonsOK = TRUE)), colonsOK = TRUE), uniquePiece))   ## create the name of the new node ##nameMashup
                 if(safeDeparse(paramExpr[[1]], warn = TRUE) %in% liftedCallsDoNotAddIndexing) {   ## skip adding indexing to mixed-size calls
                     newNodeNameExprIndexed <- newNodeNameExpr
                 } else {
@@ -1965,7 +1969,7 @@ modelDefClass$methods(addFullDimExtentToUnknownIndexDeclarations = function() {
 
 modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
 ## This is a (ridiculously long) function that works through the BUGS lines (declInfo elements) and varInfo to set up the graph and maps
-    if(debug) browser()
+#    if(debug) browser()
     ## 1. initialize origMaps:
     ##     "orig" in the label refers to these being the IDs that will be initially assigned.
     ##            Later the IDs will be changed when the graph is topologically sorted
@@ -1998,7 +2002,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     types <- character()          ## parallel vector of types such as "stoch", "determ", "RHSonly", and "LHSinferred"
     ## 2b. Use LHS declarations create nodes:
     ## note we need to create nodes for unknownIndex vars because origID is used in creating edges from parent variable to unknownIndex variable
-    if(debug) browser()
+#    if(debug) browser()
     for(iDI in seq_along(declInfo)) {
         BUGSdecl <- declInfo[[iDI]]
         if(BUGSdecl$numUnrolledNodes == 0) next
@@ -2072,7 +2076,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     ## 2b. Collect logProbNames and do eval to create variables in vars2LogProbName and vars2LogProbID
     ## This section is very similar to above, except that index ranges are collapsed to their beginning.
     ## E.g. a LHS "x[1:5]" must be a multivariate node, but it only needs "logProb[1]", not "logProb[1:5]"
-    if(debug) browser()
+#    if(debug) browser()
     nextLogProbID <- 1
     logProbNames <- character()
     logProbIDs <- integer()
@@ -2144,7 +2148,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     ##    From above, there is a nodeOrigID for "x[1:2]"
     ##    But now, based on the RHS usage of x[1] and x[2], there needs to be a separate vertexID for each of them
     ##
-    if(debug) browser()
+#    if(debug) browser()
     nextVertexID <- maxOrigNodeID+1 ## origVertexIDs start after origNodeIDs.  These will be sorted later.
     for(iDI in seq_along(declInfo)) {  ## Iterate over BUGS declarations (lines)
         BUGSdecl <- declInfo[[iDI]]
@@ -2178,7 +2182,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     ##                  for(i in 1:2) z[i] ~ x[i]
     ##    So x[1] and x[2] were split by the above section, but x[3:4] still has the same origID as x[1:4].
     ##    In this step a piece like x[3:4] is identified and gets a new unique vertexID
-    if(debug) browser()
+#    if(debug) browser()
     for(iV in seq_along(varInfo)) {
         if(nimbleOptions()$allowDynamicIndexing)
             if(varInfo[[iV]]$varName %in% unknownIndexNames) next 
@@ -2191,7 +2195,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
             }
         }
     }
-    if(debug) browser()
+#    if(debug) browser()
     
     ## 6. Make vertex names
     ##    E.g. from the results of the previous step, we may now need vertex names "x[1]", "x[2]" and "x[3:4]"
@@ -2221,7 +2225,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     ##
     ## Make a vector to map contiguous IDs to the original vertex IDs
     ##   The originalNodeIDs, which are at the beginning of the vertexIDs, are already guaranteed to be continuous
-    if(debug) browser()
+#    if(debug) browser()
     contigID_2_origVertexID <- c(1:maxOrigNodeID, sort(allNewVertexIDs))
     numContigVertices <- length(contigID_2_origVertexID)
     ## Now make a vector to map the other way
@@ -2232,7 +2236,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
 
     ## 7b. check for existence of non-orig nodes and add them to types vector
     ## for now these are all labeled as "RHSonly" and later we'll use the vectorID_2_nodeID to relabel some as "LHSinferred"
-    if(debug) browser()
+#    if(debug) browser()
     if(length(allVertexNames) > maxOrigNodeID) {
         nodeNamesRHSonly <- allVertexNames[ (maxOrigNodeID + 1) : length(allVertexNames) ]
         types <- c(types, rep('RHSonly', length(allVertexNames) - maxOrigNodeID))
@@ -2255,7 +2259,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     }
         
     ## 8. Collect edges from RHS vars to LHS nodes
-    if(debug) browser()
+#    if(debug) browser()
     edgesFrom <- numeric(0)          ## Set up aligned vectors of edgeFrom, edgesTo, and the parentExprID of an edge, i.e. which part of a pulled apart expression is an edge from.  E.g x ~ dnorm(a, b) would make an edgeFrom entry with the ID of a, edgeTo with ID of x, and parentExprID would be 1 since the a would be the first piece of the RHS as it is pulled apart.  The next edge would from from b, to x, with parentExprID of 2.
     edgesTo <- numeric(0)
     edgesParentExprID <- numeric(0)
@@ -2283,7 +2287,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     ## 9. Collect edges from original nodes to inferred vertices
     ##    e.g. When x[1:2] has been fractured into x[1] and x[2], there are edges from x[1:2] to x[1] and x[2]
     ##         Note that in getDependencies("x[1]"), the result will include "x[1:2]" as the nodeFunction of "x[1]"
-    if(debug) browser()
+#    if(debug) browser()
     for(iV in seq_along(varInfo)) {
         varName <- varInfo[[iV]]$varName
         if(nimbleOptions()$allowDynamicIndexing)
@@ -2300,7 +2304,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     }
 
     ## 9b. truncate vertexID_2_nodeID and relabel some vertices as LHSinferred
-   if(debug) browser()
+#   if(debug) browser()
     vertexID_2_nodeID <- vertexID_2_nodeID[1:numContigVertices]
     types[ types == 'RHSonly' & vertexID_2_nodeID != 0] <- 'LHSinferred' ## The types == 'RHSonly' could be obtained more easily, since it will be a single set of FALSES followed by a single set of TRUES, but anyway, this works
     unknownIndexNodes <- types == 'unknownIndex'
@@ -2311,20 +2315,20 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     allVertexNames[types == 'RHSonly'] <- convertSplitVertexNamesToEvalSafeNames(allVertexNames[types == 'RHSonly'])
     
     ## 10. Build the graph for topological sorting
-    if(debug) browser()
+#    if(debug) browser()
     graph <<- graph.empty()
     graph <<- add.vertices(graph, length(allVertexNames), name = allVertexNames) ## add all vertices at once
     allEdges <- as.numeric(t(cbind(edgesFrom, edgesTo)))
     graph <<- add.edges(graph, allEdges)                                         ## add all edges at once
 
     ## 11. Topologically sort and re-index all objects with vertex IDs
-    if(debug) browser()
+#    if(debug) browser()
     newGraphID_2_oldGraphID <- as.numeric(topological.sort(graph, mode = 'out'))
     oldGraphID_2_newGraphID <- sort(newGraphID_2_oldGraphID, index = TRUE)$ix
     graph <<- permute.vertices(graph, oldGraphID_2_newGraphID)  # re-label vertices in the graph
 
     ## 11b. make new maps that use the sorted IDS
-    if(debug) browser()
+#    if(debug) browser()
     vars_2_nodeID <- new.env()       ## this will become maps$vars2graphID_functions
     vars_2_vertexID <- new.env()     ## this will become maps$vars2graphID_values
     for(iV in seq_along(varInfo)) {  ## for each variable, populate vars_2_nodeID and vars_2_vettexID
@@ -2357,7 +2361,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     ## for now we have elementIDs for all unknownIndex vars, as it's easier to generate them than not
     ## given that initial element vector is based on vertices and unknownIndex vars need to be in vertices;
     ## they presumably won't cause any issues as they shouldn't ever be used
-    if(debug) browser()
+#    if(debug) browser()
     vars_2_elementID <- new.env()
     maxVertexID <- numContigVertices
     nextElementID <- numContigVertices+1
@@ -2420,7 +2424,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
 
     ## set up the vars2graphID_functions_and_RHSonly 
     ## This will be the same as vars_2_nodeID but with NAs filled in from vars_2_vertexID
-    if(debug) browser()
+#    if(debug) browser()
     vars_2_nodeID_noNAs <- new.env()
     for(iV in seq_along(varInfo)) {
         vN <- varInfo[[iV]]$varName
@@ -2431,7 +2435,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     }
 
     ## 12. Set up things needed for maps.
-    if(debug) browser()
+#    if(debug) browser()
     maps <<- mapsClass$new()
     maps$elementID_2_vertexID <<- elementID_2_vertexID
     maps$vars2ID_elements <<- vars_2_elementID
@@ -2465,7 +2469,7 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
         }
     }
     
-    if(debug) browser()
+#    if(debug) browser()
     
     newVertexID_2_nodeID <- vertexID_2_nodeID [ newGraphID_2_oldGraphID ]
     bool <- newVertexID_2_nodeID != 0
@@ -2475,11 +2479,11 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     maps$graphID_2_nodeFunctionName <<- maps$graphID_2_nodeName
     maps$graphID_2_nodeFunctionName[bool] <<- maps$graphID_2_nodeName[ newVertexID_2_nodeID ]
 
-    if(debug) browser()
+#    if(debug) browser()
     maps$vars2GraphID_values <<- vars_2_vertexID
     maps$vars2GraphID_functions <<- vars_2_nodeID
 
-    if(debug) browser()
+#    if(debug) browser()
 
     maps$vars2LogProbName <<- vars2LogProbName
 
@@ -2677,7 +2681,7 @@ modelDefClass$methods(genVarInfo3 = function() {
 })
 
 modelDefClass$methods(addUnknownIndexVars = function(debug = FALSE) {
-    if(debug) browser()
+#    if(debug) browser()
     unknownIndexNames <<- NULL
     if(nimbleOptions()$allowDynamicIndexing) 
         for(iDI in seq_along(declInfo)) {
