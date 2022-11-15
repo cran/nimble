@@ -1,0 +1,30 @@
+===== Starting MCMC test for unnamed case. =====
+===== Monitors =====
+thin = 1: s1, s2
+===== Samplers =====
+RW sampler (2)
+  - s1
+  - s2
+              s1         s2
+mean  3.08747905 2.98226691
+sd    0.09932756 0.09504889
+2.5%  2.90139070 2.81233184
+97.5% 3.26618954 3.17636930
+===== Finished MCMC test for unnamed case. =====
+===== Starting MCMC test for unnamed case. =====
+===== Monitors =====
+thin = 1: alpha
+===== Samplers =====
+RW sampler (3)
+  - alpha[]  (3 elements)
+       alpha[1] alpha[2]  alpha[3]
+mean  11.916063 23.78133 35.319204
+sd     1.790761  3.44358  5.106039
+2.5%   8.160934 16.43550 24.429034
+97.5% 15.347780 29.59051 43.274693
+===== Finished MCMC test for unnamed case. =====
+===== Monitors =====
+thin = 1: lambda
+===== Samplers =====
+RW sampler (1)
+  - lambda

@@ -51,22 +51,20 @@ decide <- function(logMetropolisRatio) {
 decideAndJump <- nimbleFunction(
     name = 'decideAndJump',
     setup = function(model, mvSaved, target, calcNodes) {
-        calcNodesNoSelf <- model$getDependencies(target, self = FALSE)
-        isStochCalcNodesNoSelf <- model$isStoch(calcNodesNoSelf)   ## should be made faster
-        calcNodesNoSelfDeterm <- calcNodesNoSelf[!isStochCalcNodesNoSelf]
-        calcNodesNoSelfStoch <- calcNodesNoSelf[isStochCalcNodesNoSelf]
+        ccList <- mcmc_determineCalcAndCopyNodes(model, target)
+        copyNodesDeterm <- ccList$copyNodesDeterm; copyNodesStoch <- ccList$copyNodesStoch  # not used: calcNodes, calcNodesNoSelf
     },
     run = function(modelLP1 = double(), modelLP0 = double(), propLP1 = double(), propLP0 = double()) {
         logMHR <- modelLP1 - modelLP0 - propLP1 + propLP0
         jump <- decide(logMHR)
         if(jump) {
             nimCopy(from = model, to = mvSaved, row = 1, nodes = target, logProb = TRUE)
-            nimCopy(from = model, to = mvSaved, row = 1, nodes = calcNodesNoSelfDeterm, logProb = FALSE)
-            nimCopy(from = model, to = mvSaved, row = 1, nodes = calcNodesNoSelfStoch, logProbOnly = TRUE)
+            nimCopy(from = model, to = mvSaved, row = 1, nodes = copyNodesDeterm, logProb = FALSE)
+            nimCopy(from = model, to = mvSaved, row = 1, nodes = copyNodesStoch, logProbOnly = TRUE)
         } else {
             nimCopy(from = mvSaved, to = model, row = 1, nodes = target, logProb = TRUE)
-            nimCopy(from = mvSaved, to = model, row = 1, nodes = calcNodesNoSelfDeterm, logProb = FALSE)
-            nimCopy(from = mvSaved, to = model, row = 1, nodes = calcNodesNoSelfStoch, logProbOnly = TRUE)
+            nimCopy(from = mvSaved, to = model, row = 1, nodes = copyNodesDeterm, logProb = FALSE)
+            nimCopy(from = mvSaved, to = model, row = 1, nodes = copyNodesStoch, logProbOnly = TRUE)
         }
         returnType(logical())
         return(jump)
@@ -347,12 +345,12 @@ samplesSummary <- function(samples, round) {
 
 ## weed out missing indices from the monitors
 mcmc_processMonitorNames <- function(model, nodes) {
-    isLogProbName <- grepl('logProb', nodes)
+    isLogProbName <- grepl('^logProb_', nodes)
     expandedNodeNames <- model$expandNodeNames(nodes[!isLogProbName])
     origLogProbNames <- nodes[isLogProbName]
     expandedLogProbNames <- character()
     if(length(origLogProbNames) > 0) {
-        nodeName_fromLogProbName <- gsub('logProb_', '', origLogProbNames)
+        nodeName_fromLogProbName <- gsub('^logProb_', '', origLogProbNames)
         expandedLogProbNames <- model$modelDef$nodeName2LogProbName(nodeName_fromLogProbName)
     }
     return(c(expandedNodeNames, expandedLogProbNames))
@@ -403,6 +401,77 @@ mcmc_checkWAICmonitors <- function(model, monitors, dataNodes) {
     }
     messageIfVerbose('  [Note] Monitored nodes are valid for WAIC.')
 }
+
+
+
+## create the Rmodel object using arguments provided to nimbleMCMC
+mcmc_createRmodelObject <- function(model, inits, nchains, setSeed, code, constants, data, dimensions, check) {
+    if(missing(model)) {  ## model object not provided
+        if(!missing(inits)) {
+            if(!is.function(inits) && !is.list(inits)) stop('inits must be a function, a list of initial values, or a list (of length nchains) of lists of initial values')
+            if(is.list(inits) && (length(inits) > 0) && is.list(inits[[1]]) && (length(inits) != nchains)) stop('inits must be a function, a list of initial values, or a list (of length nchains) of lists of inital values')
+            if(is.function(inits)) {
+                if(is.numeric(setSeed) || setSeed) { if(is.numeric(setSeed)) set.seed(setSeed[1]) else set.seed(0) }
+                theseInits <- inits()
+            } else if(is.list(inits) && (length(inits) > 0) && is.list(inits[[1]])) {
+                theseInits <- inits[[1]]
+            } else theseInits <- inits
+            Rmodel    <- nimbleModel(code, constants, data, theseInits, dimensions = dimensions, check = check)    ## inits provided
+        } else Rmodel <- nimbleModel(code, constants, data,             dimensions = dimensions, check = check)    ## inits not provided
+    } else {              ## model object provided
+        if(!is.model(model)) stop('model argument must be a NIMBLE model object')
+        Rmodel <- if(is.Rmodel(model)) model else model$Rmodel
+        if(!is.Rmodel(Rmodel)) stop('something went wrong')
+    }
+    return(Rmodel)
+}
+
+
+## create the lists of calcNodes and copyNodes for use in MCMC samplers
+mcmc_determineCalcAndCopyNodes <- function(model, target) {
+    targetExpanded <- model$expandNodeNames(target)
+    modelPredictiveNodes <- model$getNodeNames(predictiveOnly = TRUE)
+    targetExpandedPPbool <- targetExpanded %in% modelPredictiveNodes
+    targetAllPP <- all(targetExpandedPPbool)
+    targetAnyPP <- any(targetExpandedPPbool)
+    ## if a particular sampler is assigned *jointly to PP and non-PP* nodes, then we're going to bail
+    ## out and quit, if the option MCMCusePredictiveDependenciesInCalculations == FALSE.
+    ## this is an extreme corner-case, which I think will lead to problems.
+    if(targetAnyPP && !targetAllPP && !getNimbleOption('MCMCusePredictiveDependenciesInCalculations'))
+        stop('cannot assign samplers jointly to posterior predictive (PP) nodes and non-PP nodes, when MCMCusePredictiveDependenciesInCalculations option is FALSE', call. = FALSE)
+    ## if the sampler calling this, itself, is operating exclusively on posterior predictive nodes,
+    ## then regardless of how the rest of the model is being sampled (w.r.t. inclusion of posterior predictive nodes),
+    ## we'll include 'self' and all stochastic dependencies (the full markov blanket) in the calculations,
+    ## which necessarily are taking place entirely within a posterior predictive network of nodes.
+    ## this should lead to correct behaviour (consistent samples and joint posteriors) in all cases.
+    if(targetAllPP) {
+        ## when sampler is operating only on posterior predictive nodes,
+        ## then always include all predictive dependencies:
+        calcNodes <- model$getDependencies(target, includePredictive = TRUE)
+        calcNodesNoSelf <- model$getDependencies(target, self = FALSE, includePredictive = TRUE)
+        ##calcNodesPPomitted <- character()
+    } else {
+        ## usual case:
+        calcNodes <- model$getDependencies(target)
+        calcNodesNoSelf <- model$getDependencies(target, self = FALSE)
+        ##calcNodesPPomitted <- setdiff(model$getDependencies(target, includePredictive = TRUE), calcNodes)
+    }
+    ## copyNodes:
+    copyNodes <- model$getDependencies(target, self = FALSE)
+    isStochCopyNodes <- model$isStoch(copyNodes)
+    copyNodesDeterm <- copyNodes[!isStochCopyNodes]
+    copyNodesStoch <- copyNodes[isStochCopyNodes]
+    ##
+    ccList <- list(
+        calcNodes = calcNodes,
+        calcNodesNoSelf = calcNodesNoSelf,
+        ##calcNodesPPomitted = calcNodesPPomitted,
+        copyNodesDeterm = copyNodesDeterm,
+        copyNodesStoch = copyNodesStoch
+    )
+    return(ccList)
+}
+
 
 
 
