@@ -1,4 +1,4 @@
-aa0d93ae148532599e8fadb93f0c2067 *DESCRIPTION
+3751434282e857855f7bb38d5a51e7f6 *DESCRIPTION
 0d74503b19a98eced8a5edfa31325e92 *INSTALL
 78b8827ed95e8c99bc5fa2b72cf56236 *LICENSE
 0931510f598af4efd9acae6f376ef84d *NAMESPACE
@@ -21,7 +21,7 @@ ea67734a59c7b90545058ccda18ee4fb *R/CAR.R
 39fb7fe5873a3618e009cc3afb00fc30 *R/MCMC_RJ.R
 e582d26b3345d0ac080c6005b22bdd01 *R/MCMC_WAIC.R
 7183d320d731e7fbe5e4ff88469c66b0 *R/MCMC_autoBlock.R
-ffa1307e9bdde237404643cb0d44f99c *R/MCMC_build.R
+14d63f249d5eeb6158381d159dcec1b1 *R/MCMC_build.R
 da9bf606c96962e01c53f10b2626c2c9 *R/MCMC_configuration.R
 f063cbe852fc6388b463740e13d68c26 *R/MCMC_conjugacy.R
 a1545c6616ba8ee5e0dbe3189e7cc428 *R/MCMC_run.R
@@ -122,7 +122,7 @@ a27bba4a4fbe802716c67e1eb36c39ad *inst/CppCode/nimOptim.cpp
 1a8003d137e9b9da31f4e224fddb322f *inst/CppCode/predefinedNimbleLists.cpp
 f90db49645a2e072c6b689bea0215cfa *inst/CppCode/removeCustomizedMakeconf.R
 e18aa482c07df1e2462252f6d1a64f3f *inst/CppCode/smartPtrs.cpp
-88ecf901faac0c0d5fce3d57bf7b9cba *inst/NEWS.md
+fa7d321399be61379bc168ffb74954eb *inst/NEWS.md
 f03548dfe6904008291d2ece0dd14fc8 *inst/classic-bugs/LICENSE
 13c2270040eac65a231947608c1b26fd *inst/classic-bugs/R/Rcheck.R
 d7aa853ae08a5bf1cebbc7aaeb63cd23 *inst/classic-bugs/R/bench.R
@@ -966,7 +966,7 @@ e6640922fc570de2d5907e6745bc0a83 *tests/testthat/test-initializeModel.R
 3184fe65ac73c1ec055d9691968bc7c2 *tests/testthat/test-macros.R
 6355c0d383294ce0ef074b6ef7e1f2b3 *tests/testthat/test-math.R
 faeb90d2a8c6822b55a246033d1200e5 *tests/testthat/test-mcem.R
-2d3b74e876bf8326f5e0a93a740ef774 *tests/testthat/test-mcmc.R
+fe1857f51e22280f7581fc3de29a363c *tests/testthat/test-mcmc.R
 fd1b1d16f0672f8e31ed0dc065419516 *tests/testthat/test-mcmcrj.R
 5ccb0c7b66ca53416868067532db0e32 *tests/testthat/test-misc.R
 e6b56c66d9891911cb16f5974a680676 *tests/testthat/test-modelValuesInterface.R
