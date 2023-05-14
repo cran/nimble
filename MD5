@@ -1,5 +1,5 @@
-3751434282e857855f7bb38d5a51e7f6 *DESCRIPTION
-0d74503b19a98eced8a5edfa31325e92 *INSTALL
+a0154f56638c8a7e78895843fb721439 *DESCRIPTION
+474ac1b1a2db2696845b9971d9c60f32 *INSTALL
 78b8827ed95e8c99bc5fa2b72cf56236 *LICENSE
 0931510f598af4efd9acae6f376ef84d *NAMESPACE
 85c519d27f1b10b78909cec38ce09f78 *R/BNP_distributions.R
@@ -60,7 +60,7 @@ fabdfafab2ca274a3cadb4c23dde47e1 *R/distributions_processInputList.R
 e8d85fe584a4d3b6c8afa3572b9c67b1 *R/genCpp_buildIntermediates.R
 4dbe595aab1fb0baf3ee2d915c48e855 *R/genCpp_eigenization.R
 3399e15ac1bc01454d063f1febe1833f *R/genCpp_exprClass.R
-39928c070d1e53b6f861d1e8e36b9c6f *R/genCpp_generateCpp.R
+c3bf4594ddf3507aa8e13d8c1166855a *R/genCpp_generateCpp.R
 d6172a76524f3461f952bbbe78b27f20 *R/genCpp_initSizes.R
 59245b9a34ea2eff7d23b336bbba6dd3 *R/genCpp_insertAssertions.R
 d7e9a3c67322698dccdb241a03b456f7 *R/genCpp_liftMaps.R
@@ -105,7 +105,7 @@ fed8a9555a45e372b94706ab027852d9 *inst/CITATION
 536a3d62dd50485c8ca751031218be7a *inst/CppCode/EigenTypedefs.cpp
 de41672b92b461322a65335a443b6356 *inst/CppCode/GNUmakefile
 d753b6907bb916d14702205be94c452a *inst/CppCode/GNUmakefile_customizeMakeconf
-67ae0ee75be89c0cf612672d2372547b *inst/CppCode/Makevars
+b8d6a617cfdd6923b2e5f84b2636f61b *inst/CppCode/Makevars
 ba7b5e33f6d62f131f6f171a479ec471 *inst/CppCode/ModelClassUtils.cpp
 0eadf797326b6c2198b6a4911cdd194d *inst/CppCode/NamedObjects.cpp
 c4e115639d0cf5795c7bf638e7bac1dd *inst/CppCode/RcppNimbleUtils.cpp
@@ -116,13 +116,14 @@ a46c951e6c350bcb9aaa455165d49129 *inst/CppCode/customizeMakeconf.R
 9e7d0009bef8db1465d14e3c1edad331 *inst/CppCode/dists.cpp
 22b2024cf354fd0b6ded5fd7d403f88d *inst/CppCode/dllFinalizer.cpp
 ad8522a456c8c064879f9e265b3af6c9 *inst/CppCode/eigenUsingClasses.cpp
+fcbd4879644aac2c4fdd54624deb5b58 *inst/CppCode/nimDerivs_atomic_classes.cpp
 79b97612243ad2d9a4ad72c43c94042f *inst/CppCode/nimDists.cpp
 a27bba4a4fbe802716c67e1eb36c39ad *inst/CppCode/nimOptim.cpp
 4858b438ab8b63fd50edd5db96024e72 *inst/CppCode/nimbleGraph.cpp
 1a8003d137e9b9da31f4e224fddb322f *inst/CppCode/predefinedNimbleLists.cpp
 f90db49645a2e072c6b689bea0215cfa *inst/CppCode/removeCustomizedMakeconf.R
 e18aa482c07df1e2462252f6d1a64f3f *inst/CppCode/smartPtrs.cpp
-fa7d321399be61379bc168ffb74954eb *inst/NEWS.md
+4ff66869fce87b218d7c19f7eed1b282 *inst/NEWS.md
 f03548dfe6904008291d2ece0dd14fc8 *inst/classic-bugs/LICENSE
 13c2270040eac65a231947608c1b26fd *inst/classic-bugs/R/Rcheck.R
 d7aa853ae08a5bf1cebbc7aaeb63cd23 *inst/classic-bugs/R/bench.R
@@ -761,7 +762,7 @@ b9437bb90831cefdf25f2e0d08d9ce24 *inst/include/nimble/EigenTypedefs.h
 ae6378f7804d493aad955bd25f3ec44c *inst/include/nimble/ModelClassUtils.h
 7ad651942a76fd668786060d17f6e061 *inst/include/nimble/NamedObjects.h
 3c285e77b14ac939640bc07cdbcda6b3 *inst/include/nimble/NimArr.h
-18c9bfd5fce5cb24d8fe877033576d2f *inst/include/nimble/NimArrBase.h
+1a7f695b0e64bf0365f5aa6a746d4bbf *inst/include/nimble/NimArrBase.h
 641a9125190765e3a193526a642fae50 *inst/include/nimble/RcppNimbleUtils.h
 5b4c216055e2735937dc248b7e068ea4 *inst/include/nimble/RcppUtils.h
 9281d84f7e1c4f86b5c199a01edac379 *inst/include/nimble/Utils.h
@@ -771,6 +772,8 @@ c3689c622504e8e950fa24868bd0c7a1 *inst/include/nimble/dists.h
 d8e015ce08f1259ea14bd6cc83070035 *inst/include/nimble/dllFinalizer.h
 6ab11b8e31a20a4a0d3336eb301ed397 *inst/include/nimble/dynamicRegistrations.h
 2930f5225af7520f8ce88edc062cddf8 *inst/include/nimble/eigenUsingClasses.h
+3c429166721c1604f56fb720c38b31e3 *inst/include/nimble/nimDerivs_atomic_classes.h
+726c24d3cd7577bc0c28f3f689785d2c *inst/include/nimble/nimDerivs_dists.h
 abf8545117fbdd4410264c5cc45b1048 *inst/include/nimble/nimDists.h
 cb4b895b1cf36d2f6adfef1c9cce61f0 *inst/include/nimble/nimOptim.h
 c53180757bf709cd8706d0bf30cc6d4b *inst/include/nimble/nimbleCppAD.h
@@ -780,11 +783,11 @@ a8acbd7e9c9ea1eeae1936f1370512f7 *inst/include/nimble/nimbleGraph.h
 038cbd54aa3bc0f84b0b80269d0d0384 *inst/include/nimble/nodeFun.h
 07306e6f1c4fe8777a571320e7da7377 *inst/include/nimble/predefinedNimbleLists.h
 bdb69e7d3a67cceac3e9d529b3fe9bb8 *inst/include/nimble/smartPtrs.h
-f620ae86cf954f0a8a2df86f381bdcf9 *inst/make/Makevars
-fc9d92aefee7e4d3ef32e6ac9ae70433 *inst/make/Makevars.in
-5f8198914efdfc2812d2c9077e8873ee *inst/make/Makevars.win.in
-36d7c4d1978d175c017b46d4dd90334a *inst/make/Makevars_lib
-c5c671723fe13c8262ce929b9fb12fee *inst/make/Makevars_lib.in
+3fea7828a11006ef4056a8f9aab50388 *inst/make/Makevars
+e16175907b9262c308f59e1760ce63e4 *inst/make/Makevars.in
+80d7c1b3f4097f7906f409c1a7198d43 *inst/make/Makevars.win.in
+2ecc5ca9c8f5ed137c5fa021aadea91d *inst/make/Makevars_lib
+76997a3f8bef9ca98ff0ce50f45b88de *inst/make/Makevars_lib.in
 d189017f26d1244487e9d90773840c39 *man/ADNimbleList.Rd
 5c1f335b58966b24f989cc8bf69d5b4e *man/BUGSdeclClass-class.Rd
 c95793b09fc309709a61c7bff8c222f9 *man/CAR-Normal.Rd
@@ -922,8 +925,8 @@ b048b41dadb97e587ffa19d4142f0b61 *man/valueInCompiledNimbleFunction.Rd
 6a33808ec9d01d550a7279d9d91967f8 *man/waicList.Rd
 e552d1e6d55a60166f8a0259fe234981 *man/withNimbleOptions.Rd
 d41d8cd98f00b204e9800998ecf8427e *src/DO_NOT_PUT_CODE_HERE_DO_IN_INST_CPPCODE
-38677ff9ed781f4c3f29b081938d2ea3 *src/Makevars.in
-ffca1d763209c31aa9a3ff2ea8546015 *src/Makevars.win
+9827acd902d95e7868f4bbb71e2efe92 *src/Makevars.in
+6116c4a3bbaf73dbc269492c7876e0e5 *src/Makevars.win
 f85556efa0fa62ee2e92ad93fa06e0e3 *src/nimble.cpp
 d166f01f7662b62fcb3c52a803748cc9 *tests/testthat/bnp_monteCarloTest.Rmd
 b7cb8104fcc30e277076eaed716ac8dc *tests/testthat/distributionsTestLog.Rout
@@ -938,6 +941,7 @@ bcd3b3157560e4144b3f007c66b855ab *tests/testthat/distributionsTestLog_Correct.Ro
 ea38368d40e287cfb482cf70eef94956 *tests/testthat/mcemTestLog_Correct.Rout
 e034d9185e04417d6ebabd475786fc66 *tests/testthat/mcmcTestLog.Rout
 015372b1aabfd2600901390f500639bb *tests/testthat/mcmcTestLog_Correct.Rout
+325edd770ec9b3b075dab18f961ba41d *tests/testthat/sizeTestLog.Rout
 6ab8ab624c42b14e1883442324e2eada *tests/testthat/sizeTestLog_Correct.Rout
 2b7f340a07bb2ef4be2c4d7ab153b0f5 *tests/testthat/test-ADfunctions.R
 b0c3393138bd29352c5925b27ddc01cd *tests/testthat/test-ADmodels.R
