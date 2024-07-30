@@ -15,6 +15,7 @@
 \alias{sampler_AF_slice}
 \alias{sampler_crossLevel}
 \alias{sampler_RW_llFunction_block}
+\alias{sampler_RW_multinomial}
 \alias{sampler_RW_dirichlet}
 \alias{sampler_RW_wishart}
 \alias{sampler_RW_lkj_corr_cholesky}
@@ -30,6 +31,7 @@
 \alias{posterior_predictive}
 \alias{RW}
 \alias{RW_block}
+\alias{RW_multinomial}
 \alias{RW_dirichlet}
 \alias{RW_wishart}
 \alias{RW_llFunction}
@@ -37,7 +39,6 @@
 \alias{AF_slice}
 \alias{crossLevel}
 \alias{RW_llFunction_block}
-\alias{sampler_RW_multinomial}
 \alias{CRP}
 \alias{CRP_concentration}
 \alias{DPmeasure}
@@ -83,6 +84,8 @@ sampler_AF_slice(model, mvSaved, target, control)
 sampler_crossLevel(model, mvSaved, target, control)
 
 sampler_RW_llFunction_block(model, mvSaved, target, control)
+
+sampler_RW_multinomial(model, mvSaved, target, control)
 
 sampler_RW_dirichlet(model, mvSaved, target, control)
 
@@ -294,6 +297,18 @@ The RW_llFunction_block sampler accepts the following control list elements:
 \item propCov. The initial covariance matrix for the multivariate normal proposal distribution.  This element may be equal to the character string 'identity', in which case the identity matrix of the appropriate dimension will be used for the initial proposal covariance matrix. (default = 'identity')
 \item llFunction. A specialized nimbleFunction that accepts no arguments and returns a scalar double number.  The return value must be the total log-likelihood of all stochastic dependents of the target nodes -- and, if includesTarget = TRUE, of the target node(s) themselves --  or whatever surrogate is being used for the total log-likelihood.  This is a required element with no default.
 \item includesTarget. Logical variable indicating whether the return value of llFunction includes the log-likelihood associated with target.  This is a required element with no default.
+}
+}
+
+\section{RW_multinomial sampler}{
+
+
+This sampler updates latent multinomial distributions, using Metropolis-Hastings proposals to move observations between pairs of categories.  Each proposal moves one or more observations from one category to another category, and acceptance or rejection follows standard Metropolis-Hastings theory.  The number of observations in the proposed move is randomly drawn from a discrete uniform distribution, which is bounded above by the 'maxMove' control argument.  The RW_multinomial sampler can make multiple independent attempts at transitions on each sampling iteration, which is govered by the 'tries' control argument.
+ 
+The \code{RW_multinomial} sampler accepts the following control list elements:
+\itemize{
+\item maxMove.  An integer argument, specifying the upper bound for the number of observations to propose moving, on each independent propose/accept/reject step.  The number to move is drawn from a discrete uniform distribution, with lower limit one, and upper limit given by the minimum of 'maxMove' and the number of observations in the category. The default value for 'maxMove' is 1/20 of the total number of observations comprising the target multinomial distribution (given by the 'size' parameter of the distribution).
+\item tries.  An integer argument, specifying the number of independent Metropolis-Hastings proposals (and subsequent acceptance or rejection) that are attempted each time the sampler operates.  For example, if 'tries' is one, then a single proposal (of moving one or more observations to a different category) will be made, and either accepted or rejected.  If tries is two, this process is repeated twice.  The default value for 'tries' scales as the cube root of the total number of observations comprising the target multinomial distribution (given by the 'size' parameter of the distribution).
 }
 }
 

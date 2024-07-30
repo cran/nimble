@@ -14,8 +14,8 @@ Description: A system for writing hierarchical statistical models largely
     of MCMC as the main goal of the 'BUGS'/'JAGS' language for writing models,
     one can use 'NIMBLE' for writing arbitrary other kinds of model-generic
     algorithms as well. A full User Manual is available at <https://r-nimble.org>.
-Version: 1.2.0
-Date: 2024-06-07
+Version: 1.2.1
+Date: 2024-07-31
 Maintainer: Christopher Paciorek <paciorek@stat.berkeley.edu>
 Authors@R: c(
     person("Perry", "de Valpine", role = "aut"),
@@ -88,7 +88,7 @@ Collate: config.R all_utils.R options.R distributions_inputList.R
         nimble-package.r QuadratureGrids.R zzz.R
 RoxygenNote: 7.2.3
 NeedsCompilation: yes
-Packaged: 2024-06-07 15:59:42 UTC; paciorek
+Packaged: 2024-07-30 00:19:11 UTC; paciorek
 Author: Perry de Valpine [aut],
   Christopher Paciorek [aut, cre],
   Daniel Turek [aut],
@@ -108,4 +108,4 @@ Author: Perry de Valpine [aut],
   Lauren Ponisio [ctb] (contributions to the cross-validation code),
   Peter Sujan [ctb] (multivariate t distribution code)
 Repository: CRAN
-Date/Publication: 2024-06-09 06:40:02 UTC
+Date/Publication: 2024-07-30 07:50:02 UTC

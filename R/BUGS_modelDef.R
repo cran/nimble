@@ -341,7 +341,7 @@ modelDefClass$methods(assignDimensions = function(dimensions, initsList, dataLis
 
     ## update added Dec 2023, DT ... tbt earlier update in newModel method (Oct 2015)
     ## handling for JAGS style inits (a list of lists)
-    if(length(initsList) > 0 && is.list(initsList[[1]]))   initsList <- initsList[[1]]
+    if(length(initsList) > 0 && is.list(initsList[[1]]) && !is.data.frame(initsList[[1]]))   initsList <- initsList[[1]]
     ##
     # add dimensions of any *non-scalar* inits to dimensionsList
     # we'll try to be smart about this: check for duplicate names in inits and dimensions, and make sure they agree
@@ -2382,16 +2382,16 @@ modelDefClass$methods(genExpandedNodeAndParentNames3 = function(debug = FALSE) {
     
     ## 10. Build the graph for topological sorting
 #    if(debug) browser()
-    graph <<- graph.empty()
-    graph <<- add_vertices(graph, length(allVertexNames), name = allVertexNames) ## add all vertices at once
+    graph <<- igraph::make_empty_graph()
+    graph <<- igraph::add_vertices(graph, length(allVertexNames), name = allVertexNames) ## add all vertices at once
     allEdges <- as.numeric(t(cbind(edgesFrom, edgesTo)))
-    graph <<- add_edges(graph, allEdges)                                         ## add all edges at once
+    graph <<- igraph::add_edges(graph, allEdges)                                         ## add all edges at once
 
     ## 11. Topologically sort and re-index all objects with vertex IDs
 #    if(debug) browser()
-    newGraphID_2_oldGraphID <- as.numeric(topo_sort(graph, mode = 'out'))
+    newGraphID_2_oldGraphID <- as.numeric(igraph::topo_sort(graph, mode = 'out'))
     oldGraphID_2_newGraphID <- sort(newGraphID_2_oldGraphID, index = TRUE)$ix
-    graph <<- permute(graph, oldGraphID_2_newGraphID)  # re-label vertices in the graph
+    graph <<- igraph::permute(graph, oldGraphID_2_newGraphID)  # re-label vertices in the graph
 
     ## 11b. make new maps that use the sorted IDS
 #    if(debug) browser()
@@ -2908,7 +2908,7 @@ modelDefClass$methods(newModel = function(data = list(), inits = list(), where =
 
     ## handling for JAGS style inits (a list of lists)
     ## added Oct 2015, DT
-    if(length(inits) > 0 && is.list(inits[[1]])) {
+    if(length(inits) > 0 && is.list(inits[[1]]) && !is.data.frame(inits[[1]])) {
         message('  [Note] Detected JAGS-style initial values, provided as a list of lists. Using the first set of initial values')
         inits <- inits[[1]]
     }
