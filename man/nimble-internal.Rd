@@ -74,10 +74,17 @@
 \alias{AGHQuad_params}
 \alias{AGHQuad_summary}
 \alias{messageIfVerbose}
+\alias{getParam_BASE}
+\alias{emptyParam}
+\alias{gaussParam}
+\alias{multiGaussParam}
+\alias{splitLatents}
 \alias{calc_dmnormConjugacyContributions}
 \alias{calc_dmnormAltParams}
+\alias{calc_dmnorm_inv_ld_AltParams}
 \alias{calc_dwishAltParams}
 \alias{calc_dcatConjugacyContributions}
+\alias{PDinverse_logdet}
 \alias{CAR_calcM}
 \alias{CAR_calcC}
 \alias{CAR_calcCmatrix}

@@ -23,6 +23,7 @@
 \alias{sampler_CAR_normal}
 \alias{sampler_CAR_proper}
 \alias{sampler_polyagamma}
+\alias{sampler_barker}
 \alias{samplers}
 \alias{sampler}
 \alias{binary}
@@ -49,7 +50,6 @@
 \alias{RW_PF_block}
 \alias{RW_lkj_corr_cholesky}
 \alias{RW_block_lkj_corr_cholesky}
-\alias{sampler_barker}
 \alias{barker}
 \alias{sampler_RJ_fixed_prior}
 \alias{sampler_RJ_indicator}
@@ -103,6 +103,8 @@ sampler_CAR_proper(model, mvSaved, target, control)
 
 sampler_polyagamma(model, mvSaved, target, control)
 
+sampler_barker(model, mvSaved, target, control)
+
 sampler_RJ_fixed_prior(model, mvSaved, target, control)
 
 sampler_RJ_indicator(model, mvSaved, target, control)
@@ -125,7 +127,7 @@ sampler_slice_CRP_base_param(model, mvSaved, target, control)
 \item{control}{named list that controls the precise behavior of the sampler, with elements specific to \code{samplertype}.  The default values for control list are specified in the setup code of each sampling algorithm.  Descriptions of each sampling algorithm, and the possible customizations for each sampler (using the \code{control} argument) appear below.}
 }
 \description{
-Details of the MCMC sampling algorithms provided with the NIMBLE MCMC engine; HMC samplers are in the \code{nimbleHMC} package and particle filter samplers are in the \code{nimbleSMC} package.
+Details of the MCMC sampling algorithms provided with the NIMBLE MCMC engine; HMC samplers are in the \code{nimbleHMC} package and particle filter samplers are in the \code{nimbleSMC} package. Additional details, including some recommendations for samplers that may perform better than the samplers that NIMBLE assigns by default are provided in Section 7.11 of the User Manual.
 }
 \section{Hamiltonian Monte Carlo samplers}{
 
@@ -142,7 +144,7 @@ As of Version 0.10.0 of NIMBLE, the \code{RW_PF} and \code{RW_PF_block} samplers
 \section{\code{sampler_base}}{
  base class for new samplers
 
-When you write a new sampler for use in a NIMBLE MCMC (see \href{https://r-nimble.org/html_manual/cha-welcome-nimble.html}{User Manual}), you must include \code{contains = sampler_BASE}.
+When you write a new sampler for use in a NIMBLE MCMC (see \href{https://r-nimble.org/manual/cha-welcome-nimble.html}{User Manual}), you must include \code{contains = sampler_BASE}.
 }
 
 \section{binary sampler}{
