@@ -1,7 +1,7 @@
-6a61070c88b13eebb566bd2fac5f0597 *DESCRIPTION
-4fff12eaaf6989f61bf01708959a5664 *INSTALL
-9c2a4beee588ce91afad0b0fdecd77b3 *LICENSE
-b009795a6cd68c1cee976d5995c9696f *NAMESPACE
+356307a51bce0f0a8cec0fcea1890983 *DESCRIPTION
+d2b51535ee7c9b23c556fe0703cc64b7 *INSTALL
+9fc4ce1a1535d97230ed12a73f6acc16 *LICENSE
+1bbf6b977f02abae0144fce4de859a01 *NAMESPACE
 008d8934823da4f216b6c460557cc37d *R/BNP_distributions.R
 e9a60f28c9caa4366bba636b67c82753 *R/BNP_samplers.R
 0a7a423abf5cefca8dcdc68dc74292ca *R/BUGS_BUGSdecl.R
@@ -10,8 +10,8 @@ e8190819835a0d2bf01f45b7fd855044 *R/BUGS_getDependencies.R
 f075d9ab82bc598fc9a279cd5e176ee8 *R/BUGS_graphNodeMaps.R
 30bfca568000c2a57a82de76d5914de4 *R/BUGS_macros.R
 2d24826530a0e5b7ba989b5ea5ec4c1e *R/BUGS_mathCompatibility.R
-0fc0f13b57f026a72ccf85ccee74bfdf *R/BUGS_model.R
-7242a5da7589ca34762b8fd05b9b1235 *R/BUGS_modelDef.R
+4e1481cd6a63c87ccc89ef3f5f500125 *R/BUGS_model.R
+4ffa9b419c4bac242184ddbbee4dff16 *R/BUGS_modelDef.R
 0ae4a8628131d5ae420e6b5f620752b0 *R/BUGS_nimbleGraph.R
 53c725922788da212454722255e4d28a *R/BUGS_readBUGS.R
 fca720e0f66994f45cf768d0b285e842 *R/BUGS_testBUGS.R
@@ -21,12 +21,12 @@ fca720e0f66994f45cf768d0b285e842 *R/BUGS_testBUGS.R
 21f4c4be834c7db0282ff543cf34e3d7 *R/MCMC_RJ.R
 56ecd8311c2d3d2bee1a196806e5e121 *R/MCMC_WAIC.R
 b8346c4e1b1bbb58893705aca3ddd28b *R/MCMC_autoBlock.R
-9efdaa05f072423ad932c2eed994dbdd *R/MCMC_build.R
-d06c82541c42110875fe91b1dc8ccd27 *R/MCMC_configuration.R
-97a482ebef1e269e7e9a7805200e4925 *R/MCMC_conjugacy.R
+0619e78485b68da0bbaf08a72fcbc029 *R/MCMC_build.R
+db91e758179db99ba03dd7cfbcf15c94 *R/MCMC_configuration.R
+fc9f66285cd420210b319da5c87fd132 *R/MCMC_conjugacy.R
 b9daaa28281829c3800d5a43d7da7936 *R/MCMC_derived.R
 ceabf88d3f4caa1a36a8c01128975021 *R/MCMC_run.R
-f86aac788037ded6950cb257c21eb200 *R/MCMC_samplers.R
+fc455f2a4550acbd4e8f3f5cf03f9164 *R/MCMC_samplers.R
 8a50dcb65aa2f9eba8f08fc4c3dfa390 *R/MCMC_utils.R
 1b3326f326e5b2098dcb4ad45259af1d *R/NF_utils.R
 dc3e76fb8bc03d319186e94f1d0b31d3 *R/RCfunction_compile.R
@@ -70,7 +70,7 @@ d7e9a3c67322698dccdb241a03b456f7 *R/genCpp_liftMaps.R
 331887c38ca45a2117fc19dd0d7da2aa *R/genCpp_processSpecificCalls.R
 b63d915f21e342ae0b4e7ff59aad9bad *R/genCpp_sizeProcessing.R
 28fe3b27f74e2dcb66430a03fd640877 *R/genCpp_toEigenize.R
-4ecf124cbaae8612fc1b619b2e40850c *R/initializeModel.R
+b83a26615992ea7bd02bdef9b3485d67 *R/initializeModel.R
 349019623047a106822fe00419e94b7f *R/makevars.R
 447761dc5b3b1d142f119a3225537370 *R/miscAlgorithms.R
 9bbf1c9948884d120c29af22347e74ce *R/miscFunctions.R
@@ -86,7 +86,7 @@ be75cbb7a22be4e7b4b3a46c7969b388 *R/nimbleFunction_core.R
 7c7bb73a8f68cb246390ba8729223042 *R/nimbleList_core.R
 cb7be76c8eda08d0b312131e1f15d1e1 *R/nimbleProject.R
 2a38d4fd272f6369bfa51b47e550f5c2 *R/normTooling.R
-2467f18db1a66d8551856277a6f597e9 *R/options.R
+bc769c62e2040ca144c74eb974befc18 *R/options.R
 e7ae4be19e5f3ca572ff2ea0e0841158 *R/parameterTransform.R
 19b3c37be2f7fb92103dec4711e36c6e *R/registration.R
 482c91457ddcfb5a44e1e0620c2c83dc *R/setNimbleInternalFunctions.R
@@ -107,7 +107,7 @@ b2e7b4ebc114c8d1560b8be2c8df863c *cleanup.win
 d7f5b32ea6b02f3599cc93dd2d7de8f1 *configure.ac
 783c5209be541720af31eee6664cce26 *configure.win
 fed8a9555a45e372b94706ab027852d9 *inst/CITATION
-8f8cf41ddf2f0c011c186af04e221093 *inst/COPYRIGHTS
+61e5e0c54894277206c22f3490079645 *inst/COPYRIGHTS
 536a3d62dd50485c8ca751031218be7a *inst/CppCode/EigenTypedefs.cpp
 9d848167bc7740f03e7c840ef49ed792 *inst/CppCode/GNUmakefile
 d753b6907bb916d14702205be94c452a *inst/CppCode/GNUmakefile_customizeMakeconf
@@ -148,7 +148,7 @@ fd29a0b78d06ee64fe61ed210359aaec *inst/CppCode/nimbleCppAD.cpp
 ee14cf4e9bcf2b3e4ea312ed89d34aaf *inst/CppCode/predefinedNimbleLists.cpp
 f90db49645a2e072c6b689bea0215cfa *inst/CppCode/removeCustomizedMakeconf.R
 e18aa482c07df1e2462252f6d1a64f3f *inst/CppCode/smartPtrs.cpp
-6a78b7f86b8a29213908c644aacf9afe *inst/NEWS.md
+8922f9c314d6b3cf989590f76627bf0c *inst/NEWS.md
 f03548dfe6904008291d2ece0dd14fc8 *inst/classic-bugs/LICENSE
 13c2270040eac65a231947608c1b26fd *inst/classic-bugs/R/Rcheck.R
 d7aa853ae08a5bf1cebbc7aaeb63cd23 *inst/classic-bugs/R/bench.R
@@ -1359,7 +1359,7 @@ ba747ccceeafbc4b94ba31d418e6e65c *man/getParam.Rd
 6dc6761ab827cc1ab0348107ed3d278a *man/getSamplesDPmeasure.Rd
 2efb1f4943fc1e5f40084c27802dc65a *man/getsize.Rd
 c93dbc19e4df511a28cf988ac14b3293 *man/identityMatrix.Rd
-18a5efbcbf55da328c067eb23f934b21 *man/initializeModel.Rd
+8d7305d0d7a3d5caf846815de39d62de *man/initializeModel.Rd
 e3628c8e4cb40b7955a7aa479dcc5b00 *man/is.nf.Rd
 d72b6b916dff58b65b7a560ed08cb1d7 *man/is.nl.Rd
 5e0263e20d2294a6a9206695884613a5 *man/makeBoundInfo.Rd
@@ -1419,7 +1419,7 @@ e4e02b0cb9df5068e4766638b2a5ddb0 *man/runAGHQ.Rd
 a19a22f36d876af4804ca1684c12ee51 *man/runCrossValidate.Rd
 2b1d4fb2fa0d886b5dbeacd475e94b7b *man/runLaplace.Rd
 a31698620728fb5def2392dea12c52ba *man/runMCMC.Rd
-6aa3b1457232cff0a3318d16888aec24 *man/samplers.Rd
+f21f008f11d54b57b0bc93a7eb283870 *man/samplers.Rd
 2ad06b4ef563c8d1249f33c55c3e55ea *man/setAndCalculate.Rd
 908ddc5f582bd5fe3850a9bdc45baf06 *man/setAndCalculateOne.Rd
 c80dcfeca8ed1a7b3de57a22cf3e307e *man/setSize.Rd
@@ -1507,8 +1507,8 @@ e595c9a88cb643d015fe7295097d2b42 *tests/testthat/test-initializeModel.R
 bf65a283359f237888836b41b0ffef74 *tests/testthat/test-integrate.R
 2c2e08ec433aafd2ad19c0ecb2c423b1 *tests/testthat/test-macros.R
 64dd76820adf6085f43856c2f54c7899 *tests/testthat/test-math.R
-0a08bf2586b9ae3d518e793b1b747635 *tests/testthat/test-mcem.R
-c21061637e386a616b8cdd77b5bdaa85 *tests/testthat/test-mcmc.R
+49b375ebde22a428ccfc685391214109 *tests/testthat/test-mcem.R
+50a0f500c4e3aa72cccd88c5e662a1c7 *tests/testthat/test-mcmc.R
 6f3fcc7d834471a5208f3672ef8d00dd *tests/testthat/test-mcmcrj.R
 1d2b625544661e0d35638cda3b0defdb *tests/testthat/test-misc.R
 38a87abd58487b42d9e90359bbe8b5d5 *tests/testthat/test-miscAlgorithms.R

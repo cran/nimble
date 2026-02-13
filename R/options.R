@@ -189,6 +189,7 @@ nimOptimMethod("bobyqa",
         compileOnly = FALSE,
         buildInterfacesForCompiledNestedNimbleFunctions = FALSE,   ## provides interfaces, i.e. named access in R, to all variables in nested compiled nimbleFunctions
         clearNimbleFunctionsAfterCompiling = FALSE,
+        doRStudioHangingFix = FALSE,      ## causes implementation of the str method for all dynamically generated classes, to prevent hanging in RStudio
         checkModel = FALSE,
         checkNimbleFunction = TRUE,
         checkDuplicateNodeDefinitions = TRUE,
@@ -213,6 +214,7 @@ nimOptimMethod("bobyqa",
         MCMCassignSamplersToPosteriorPredictiveNodes = TRUE,  ## whether any samplers are assigned (by default) to PP nodes
         MCMCusePosteriorPredictiveSampler = TRUE,             ## for PP nodes being sampled, use post_pred (or otherwise RW, etc)
         MCMCwarnUnsampledStochasticNodes = TRUE,
+        MCMCwarnUnfinishedThinningInterval = TRUE,
         MCMCRJcheckHyperparam = TRUE,
         MCMCenableWAIC = FALSE,
         MCMCuseBarkerAsDefaultMV = FALSE,
